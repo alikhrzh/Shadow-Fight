@@ -1,99 +1,82 @@
 import { useEffect, useRef, useState } from "react";
-import type {
-  Move,
-  Stance,
-  Report,
-} from "../../../../packages/coach-core/src/types";
+import type { Move, Stance } from "../../../../packages/coach-core/src/types";
 import type { WorkerInput, WorkerOutput } from "../pose/protocol";
+import type { CaptureMode } from "../training/attemptController";
 import { drawOverlay } from "../pose/overlay";
-import { visible } from "../../../../packages/coach-core/src/normalize";
-export interface CameraStats {
+export type CameraFrame = Extract<WorkerOutput, { type: "result" }> & {
   fps: number;
-  latency: number;
-  visible: number;
-  message: string;
-  phase: string;
-  delegate: string;
-}
+  dark: boolean;
+};
 interface Props {
   move: Move;
   stance: Stance;
   facing: "user" | "environment";
-  onResult: (r: Report) => void;
-  onStats: (s: CameraStats) => void;
+  mode: CaptureMode;
+  attemptId: string | null;
+  highlights: string[];
+  onFrame: (frame: CameraFrame) => void;
+  onReady: () => void;
+  onError: (message: string) => void;
   onStop: () => void;
 }
-export function LiveCamera({
-  move,
-  stance,
-  facing,
-  onResult,
-  onStats,
-  onStop,
-}: Props) {
+export function LiveCamera(props: Props) {
   const videoRef = useRef<HTMLVideoElement>(null),
     canvasRef = useRef<HTMLCanvasElement>(null);
-  const callbacks = useRef({ onResult, onStats, onStop });
-  callbacks.current = { onResult, onStats, onStop };
-  const [message, setMessage] = useState("Разрешите доступ к камере…"),
-    [error, setError] = useState(false);
-  const [reviewVisible, setReviewVisible] = useState(false);
+  const latest = useRef(props);
+  latest.current = props;
+  const [message, setMessage] = useState("Разрешите доступ к камере…");
+  const { move, stance, facing } = props;
   useEffect(() => {
     let cancelled = false,
       stream: MediaStream | null = null,
-      worker: Worker | null = null,
+      worker: Worker | null = null;
+    let ready = false,
       busy = false,
-      ready = false,
       raf = 0,
       videoCallback = 0,
       sequence = 0,
-      lastVideo = -1,
-      lastTimestamp = -1,
+      lastVideo = -1;
+    let lastTimestamp = -1,
       lastRender = 0,
-      staleTimer = 0;
+      staleTimer = 0,
+      timeout = 0,
+      startup = 0;
     let count = 0,
-      windowStart = performance.now(),
-      lastStats = 0,
+      windowStart = 0,
       fps = 0,
-      delegate = "",
-      requestStarted = 0,
-      timeout = 0;
-    let highlight: string[] = [],
-      highlightUntil = 0;
+      dark = false,
+      lastLight = 0;
     const video = videoRef.current!,
       canvas = canvasRef.current!;
-    const clear = () => {
-      const ctx = canvas.getContext("2d");
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    };
+    const light = document.createElement("canvas");
+    light.width = 16;
+    light.height = 12;
+    const lightContext = light.getContext("2d", { willReadFrequently: true });
+    const clear = () =>
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    const ended = () => fail("Камера отключена. Откройте её заново.");
     const release = () => {
       ready = false;
       worker?.terminate();
-      stream?.getTracks().forEach((t) => t.stop());
+      worker = null;
+      stream?.getTracks().forEach((t) => {
+        t.removeEventListener("ended", ended);
+        t.stop();
+      });
       video.srcObject = null;
       cancelAnimationFrame(raf);
-      if (video.cancelVideoFrameCallback)
-        video.cancelVideoFrameCallback(videoCallback);
+      video.cancelVideoFrameCallback?.(videoCallback);
       window.clearInterval(staleTimer);
       window.clearTimeout(timeout);
+      window.clearTimeout(startup);
       clear();
     };
     const fail = (text: string) => {
       if (cancelled) return;
-      setMessage(text);
-      setError(true);
-      callbacks.current.onStats({
-        fps: 0,
-        latency: 0,
-        visible: 0,
-        message: text,
-        phase: "error",
-        delegate,
-      });
+      cancelled = true;
       release();
+      latest.current.onError(text);
     };
-    const send = (data: WorkerInput, transfer: Transferable[] = []) =>
-      worker?.postMessage(data, transfer);
     const schedule = () => {
       if (cancelled || !ready) return;
       if (video.requestVideoFrameCallback)
@@ -117,29 +100,47 @@ export function LiveCamera({
         return;
       busy = true;
       lastVideo = video.currentTime;
-      requestStarted = performance.now();
       const timestamp = Math.max(
         lastTimestamp + 1,
         Math.round(video.currentTime * 1000),
       );
       lastTimestamp = timestamp;
+      let bitmap: ImageBitmap | null = null;
       try {
-        const bitmap = await createImageBitmap(video);
-        if (cancelled || !ready) {
+        if (performance.now() - lastLight > 750 && lightContext) {
+          lastLight = performance.now();
+          lightContext.drawImage(video, 0, 0, 16, 12);
+          const pixels = lightContext.getImageData(0, 0, 16, 12).data;
+          let brightness = 0;
+          for (let i = 0; i < pixels.length; i += 4)
+            brightness += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+          dark = brightness / (16 * 12) < 24;
+        }
+        bitmap = await createImageBitmap(video);
+        if (cancelled || !ready || !worker) {
           bitmap.close();
           return;
         }
-        send({ type: "frame", bitmap, timestamp, sequence: ++sequence }, [
+        const current = latest.current;
+        const data: WorkerInput = {
+          type: "frame",
           bitmap,
-        ]);
+          timestamp,
+          sequence: ++sequence,
+          mode: current.mode,
+          attemptId: current.attemptId,
+        };
+        worker.postMessage(data, [bitmap]);
+        bitmap = null;
         timeout = window.setTimeout(
           () =>
             fail(
-              "Обработка кадра зависла. Остановите тренировку и попробуйте снова.",
+              "Обработка кадров слишком медленная. Повторите на другом устройстве.",
             ),
           15000,
         );
       } catch {
+        bitmap?.close();
         busy = false;
         fail(
           "Браузер не смог обработать кадр. Попробуйте актуальный Chrome или Safari.",
@@ -148,10 +149,16 @@ export function LiveCamera({
     };
     async function start() {
       try {
-        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-          fail("Для камеры откройте сайт через HTTPS или localhost.");
-          return;
-        }
+        if (cancelled) return;
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
+          return fail("Для камеры откройте сайт через HTTPS или localhost.");
+        timeout = window.setTimeout(
+          () =>
+            fail(
+              "Разрешение камеры не получено. Проверьте настройки браузера и повторите.",
+            ),
+          30000,
+        );
         const acquired = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
@@ -165,17 +172,14 @@ export function LiveCamera({
           acquired.getTracks().forEach((t) => t.stop());
           return;
         }
+        window.clearTimeout(timeout);
         stream = acquired;
         video.srcObject = stream;
         await video.play();
         if (cancelled) return;
-        stream
-          .getVideoTracks()[0]
-          .addEventListener("ended", () =>
-            fail("Камера отключена. Начните тренировку заново."),
-          );
+        stream.getTracks().forEach((t) => t.addEventListener("ended", ended));
         setMessage(
-          "Загрузка модели Full… Первый запуск может занять некоторое время.",
+          "Готовим распознавание движений… Первый запуск может занять до минуты.",
         );
         worker = new Worker(
           new URL(
@@ -186,7 +190,7 @@ export function LiveCamera({
         timeout = window.setTimeout(
           () =>
             fail(
-              "Модель не загрузилась за 90 секунд. Проверьте соединение и повторите.",
+              "Распознавание не загрузилось. Проверьте соединение и повторите.",
             ),
           90000,
         );
@@ -195,14 +199,15 @@ export function LiveCamera({
         worker.onmessage = ({ data }: MessageEvent<WorkerOutput>) => {
           if (cancelled) return;
           window.clearTimeout(timeout);
-          if (data.type === "error") {
-            fail(`Ошибка обработки: ${data.message}`);
-            return;
-          }
+          if (data.type === "error")
+            return fail(
+              "Не удалось обработать движение. Перезапустите камеру.",
+            );
           if (data.type === "ready") {
-            delegate = data.delegate;
             ready = true;
-            setMessage("Замрите в защите на секунду.");
+            windowStart = performance.now();
+            setMessage("");
+            latest.current.onReady();
             schedule();
             return;
           }
@@ -210,72 +215,54 @@ export function LiveCamera({
           const now = performance.now();
           lastRender = now;
           count++;
-          if (now - windowStart >= 750) {
+          if (now - windowStart >= 1000) {
             fps = Math.round((count * 1000) / (now - windowStart));
             count = 0;
             windowStart = now;
           }
-          if (data.live.result) {
-            highlight = data.live.result.violations.flatMap(
-              (v) => v.related_joints,
-            );
-            highlightUntil = now + 2200;
-          } else if (data.live.phase === "punch" || now > highlightUntil)
-            highlight = [];
-          setReviewVisible(highlight.length > 0);
           drawOverlay(
             canvas,
             data.frame,
             data.width,
             data.height,
             facing === "user",
-            highlight,
+            latest.current.highlights,
           );
-          if (now - lastStats >= 200) {
-            lastStats = now;
-            const message =
-              fps > 0 && fps < 10
-                ? "Недостаточная скорость обработки для оценки. Закройте другие приложения или попробуйте более мощное устройство."
-                : data.live.message;
-            setMessage(message);
-            callbacks.current.onStats({
-              fps,
-              latency: Math.round(now - requestStarted),
-              visible: Object.values(data.frame.landmarks).filter((p) =>
-                visible(p),
-              ).length,
-              message,
-              phase: data.live.phase,
-              delegate,
-            });
-          }
-          if (data.live.result) callbacks.current.onResult(data.live.result);
+          latest.current.onFrame({ ...data, fps, dark });
         };
-        send({
+        worker.postMessage({
           type: "init",
           baseUrl: new URL(import.meta.env.BASE_URL, location.href).href,
           move,
           stance,
-        });
+        } satisfies WorkerInput);
         staleTimer = window.setInterval(() => {
           if (lastRender && performance.now() - lastRender > 400) clear();
         }, 200);
       } catch (cause) {
-        const e = cause as Error;
+        const name = (cause as Error).name;
         fail(
-          e.name === "NotAllowedError"
+          name === "NotAllowedError"
             ? "Доступ к камере запрещён. Разрешите его в настройках браузера."
-            : e.name === "NotFoundError"
+            : name === "NotFoundError"
               ? "Камера не найдена. Подключите её и повторите."
               : "Не удалось открыть камеру. Закройте другие приложения, использующие её.",
         );
       }
     }
     const visibility = () => {
-      if (document.hidden) callbacks.current.onStop();
+      if (document.hidden) {
+        cancelled = true;
+        release();
+        latest.current.onStop();
+      }
     };
     document.addEventListener("visibilitychange", visibility);
-    void start();
+    // StrictMode may clean up its first effect before re-running setup. Defer
+    // permission acquisition so the discarded effect never requests a stream.
+    startup = window.setTimeout(() => {
+      void start();
+    }, 0);
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", visibility);
@@ -293,18 +280,12 @@ export function LiveCamera({
         aria-label="Камера тренировки"
       />
       <canvas ref={canvasRef} aria-hidden="true" />
-      <div
-        className={`camera-label ${error ? "camera-error" : ""}`}
-        role="status"
-      >
-        {message}
-      </div>
-      <span className="privacy-chip">● Только на вашем устройстве</span>
-      {reviewVisible && (
-        <span className="review-chip">
-          Оранжевое: суставы из замечания к последнему удару
-        </span>
+      {message && (
+        <div className="camera-label" role="status">
+          {message}
+        </div>
       )}
+      <span className="privacy-chip">● Видео на устройстве</span>
     </div>
   );
 }

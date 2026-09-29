@@ -13,5 +13,6 @@ apps/web/public/worker/
 publication/
 apps/web/public/models/*.task
 .env*
+!.env.example
 playwright-report/
 test-results/

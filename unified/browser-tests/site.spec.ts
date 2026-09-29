@@ -1,12 +1,24 @@
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ page }) => {
+  await page.route("https://www.youtube-nocookie.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<p>Video lesson</p>" }),
+  );
+});
 test("desktop/mobile layout and camera denied state", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Начать тренировку" }),
+    page.getByRole("button", { name: "Начать урок: Джеб" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /Джеб/ })).toBeVisible();
+  await expect(page.locator('[data-move="cross"] .hand-label')).toContainText(
+    "Задняя рука — правая",
+  );
+  await page.getByLabel("СТОЙКА").selectOption("southpaw");
+  await expect(page.locator('[data-move="cross"] .hand-label')).toContainText(
+    "Задняя рука — левая",
+  );
   await page.screenshot({ path: "private-data/desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -15,16 +27,17 @@ test("desktop/mobile layout and camera denied state", async ({ page }) => {
     ),
   ).toBe(true);
   await page.screenshot({ path: "private-data/mobile.png", fullPage: true });
-  await page.getByRole("button", { name: "Боковой" }).click();
-  await page.getByLabel("СТОЙКА").selectOption("southpaw");
-  await page.getByRole("button", { name: "Начать тренировку" }).click();
-  await expect(page.getByRole("status")).toContainText(
+  await page
+    .getByRole("button", { name: "Начать урок: Передний боковой" })
+    .click();
+  await page.getByRole("button", { name: "Перейти к практике →" }).click();
+  await expect(page.getByRole("alert")).toContainText(
     /Доступ к камере запрещён|Камера не найдена|Не удалось открыть камеру/,
     { timeout: 20000 },
   );
-  await page.getByRole("button", { name: "Пауза" }).click();
+  await page.getByRole("button", { name: "Выбрать другой удар" }).click();
   await expect(
-    page.getByRole("button", { name: "Начать тренировку" }),
+    page.getByRole("button", { name: "Начать урок: Джеб" }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -34,7 +47,11 @@ test("real MediaPipe worker initializes locally and processes empty image", asyn
   const external: string[] = [];
   page.on("request", (r) => {
     if (
-      !r.url().startsWith("http://127.0.0.1:5173") &&
+      !r
+        .url()
+        .startsWith(
+          `http://127.0.0.1:${process.env.SHADOW_TEST_PORT ?? 5187}/`,
+        ) &&
       !r.url().startsWith("data:")
     )
       external.push(r.url());
@@ -128,15 +145,20 @@ test("camera stream starts on click, receives model results, and stops all track
           .length,
     ),
   ).toBe(0);
-  await page.getByRole("button", { name: "Начать тренировку" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    /человек не найден|Недостаточная скорость/,
+  await page.getByRole("button", { name: /Кросс/ }).click();
+  await expect(page.locator("iframe")).toHaveAttribute(
+    "src",
+    /youtube-nocookie/,
+  );
+  await page.getByRole("button", { name: "Перейти к практике →" }).click();
+  await expect(page.locator(".training-cue")).toContainText(
+    /человек не найден|Обработка кадров слишком медленная/,
     { timeout: 60000 },
   );
   await expect(page.getByText("Проверьте камеру", { exact: true })).toHaveCount(
     0,
   );
-  await page.getByRole("button", { name: "Пауза" }).click();
+  await page.getByRole("button", { name: "Выбрать другой удар" }).click();
   expect(
     await page.evaluate(() =>
       (window as unknown as { testStreams: MediaStream[] }).testStreams.every(

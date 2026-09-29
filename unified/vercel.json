@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run model:download && npm run build",
+  "outputDirectory": "apps/web/dist",
+  "framework": null,
+  "functions": { "api/coach-feedback.ts": { "maxDuration": 30 } }
+}

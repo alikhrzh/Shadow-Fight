@@ -4,20 +4,20 @@ import {
   type Frame,
   type Point,
 } from "../../../../packages/coach-core/src/types";
-import { StreamCoach } from "../../../../packages/coach-core/src/stream";
+import { AttemptController } from "../training/attemptController";
 import type { WorkerInput, WorkerOutput } from "./protocol";
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<WorkerInput>) => void) | null;
   postMessage: (data: WorkerOutput) => void;
 };
 let model: PoseLandmarker | null = null,
-  coach: StreamCoach | null = null,
+  coach: AttemptController | null = null,
   index = 0;
 scope.onmessage = async ({ data }) => {
   try {
     if (data.type === "init") {
       model?.close();
-      coach = new StreamCoach(data.move, data.stance);
+      coach = new AttemptController(data.move, data.stance);
       index = 0;
       const files = await FilesetResolver.forVisionTasks(
         new URL("wasm/", data.baseUrl).href,
@@ -83,7 +83,13 @@ scope.onmessage = async ({ data }) => {
         landmarks: map(result.landmarks[0]),
         world_landmarks: map(result.worldLandmarks[0]),
       };
-      const live = coach.push(frame, bitmap.width, bitmap.height);
+      const live = coach.push(
+        frame,
+        bitmap.width,
+        bitmap.height,
+        data.mode ?? "observe",
+        data.attemptId ?? null,
+      );
       scope.postMessage({
         type: "result",
         frame,
@@ -92,6 +98,8 @@ scope.onmessage = async ({ data }) => {
         height: bitmap.height,
         duration: performance.now() - started,
         sequence: data.sequence,
+        attemptId: data.attemptId ?? null,
+        mode: data.mode ?? "observe",
       });
     } finally {
       bitmap.close();

@@ -2,6 +2,339 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Educational flow uses the existing ShadowCoach palette, panels and controls. */
+.lesson-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+}
+.lesson-steps li {
+  border-top: 2px solid #ffffff16;
+  padding: 12px 0;
+  color: #76836d;
+  font-size: 13px;
+}
+.lesson-steps b {
+  margin-right: 10px;
+  font-size: 10px;
+}
+.lesson-steps .reached {
+  border-color: #c7ff4a;
+  color: #d4e6bd;
+}
+.selection-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.selection-bar h2 {
+  font-size: 22px;
+  font-weight: 750;
+  margin: 8px 0 0;
+}
+.selection-bar label {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 8px;
+  color: #a0ae93;
+}
+.selection-bar select {
+  min-width: 240px;
+}
+.lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.lesson-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lesson-number {
+  display: flex;
+  justify-content: space-between;
+  color: #c7ff4a;
+  font-size: 36px;
+  font-weight: 850;
+}
+.lesson-card h2,
+.lesson-layout h2,
+.practice-notes h2 {
+  margin: 20px 0 12px;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+.lesson-card > p,
+.lesson-layout p,
+.practice-notes p {
+  color: #a2af96;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.hand-label {
+  display: block;
+  margin-top: 16px;
+  color: #c7ff4a;
+  font-size: 13px;
+}
+.key-points {
+  padding-left: 19px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #d0dac6;
+  margin: 20px 0;
+}
+.key-points li {
+  margin: 10px 0;
+  padding-left: 3px;
+}
+.key-points li::marker {
+  color: #c7ff4a;
+}
+.progress-summary {
+  margin-top: auto;
+  padding: 20px 0;
+  border-top: 1px solid #ffffff17;
+}
+.progress-summary > span {
+  font-size: 11px;
+  color: #8b9c7c;
+}
+.progress-summary strong {
+  display: block;
+  font-size: 18px;
+  margin: 8px 0;
+}
+.progress-summary small {
+  font-size: 12px;
+  color: #9ba98c;
+}
+.progress-summary p {
+  color: #8d9d80;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.progress-actions {
+  margin: 18px 0;
+}
+.progress-actions button {
+  margin-right: 12px;
+  min-height: 44px;
+}
+.lesson-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 22px;
+}
+.lesson-video iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: 0;
+  border-radius: 12px;
+  background: #080d0b;
+  margin: 20px 0;
+}
+.lesson-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 22px 0;
+}
+.lesson-notes small {
+  color: #93a483;
+  font-size: 12px;
+  line-height: 1.6;
+  display: block;
+}
+.safety-note {
+  border-left: 2px solid #c7ff4a66;
+  padding-left: 14px;
+}
+.camera-choice {
+  max-width: 320px;
+  margin-bottom: 20px;
+}
+.camera-choice > label {
+  margin-top: 0;
+}
+.training-cue {
+  order: 4;
+  padding: 18px 0 4px;
+}
+.training-cue strong {
+  color: #c7ff4a;
+  font-size: 54px;
+  font-weight: 900;
+}
+.training-cue h2 {
+  color: #d6e8c1;
+  font-size: 19px;
+  font-weight: 700;
+}
+.training-cue p {
+  margin: 8px 0;
+  color: #abbba0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.gesture-progress {
+  order: 5;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 12px 0;
+}
+.gesture-progress label {
+  color: #a4b396;
+  font-size: 12px;
+}
+.gesture-progress progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin-top: 8px;
+  accent-color: #c7ff4a;
+}
+.countdown {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #080d0bee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 24px;
+  text-align: center;
+}
+.countdown strong {
+  color: #c7ff4a;
+  font-size: clamp(100px, 24vw, 220px);
+  line-height: 1;
+  font-weight: 900;
+}
+.countdown p {
+  font-size: 25px;
+  color: #e3edd7;
+  margin-top: 24px;
+}
+.countdown small {
+  color: #a2b392;
+  font-size: 15px;
+  margin: 14px 0 24px;
+}
+.score-components {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 22px 0;
+}
+.score-components > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+.score-components dt,
+.score-components dd {
+  font-size: 12px;
+  margin: 0;
+}
+.score-components dt {
+  color: #9aaa8c;
+}
+.score-components meter {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 8px;
+  accent-color: #c7ff4a;
+}
+.ai-status {
+  padding: 14px;
+  border: 1px solid #c7ff4a33;
+  border-radius: 10px;
+  margin-top: 18px;
+}
+.ai-feedback {
+  border-top: 1px solid #ffffff20;
+  margin-top: 20px;
+  padding-top: 20px;
+}
+.ai-feedback h4 {
+  color: #d3e9bc;
+  font-size: 13px;
+  margin-top: 16px;
+  font-weight: 700;
+}
+.privacy-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #9baa8e;
+  margin-top: 28px;
+  max-width: 950px;
+}
+.privacy-copy svg {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: #b0ce8c;
+}
+.privacy-copy p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 6px;
+}
+@media (max-width: 950px) {
+  .lesson-grid {
+    gap: 12px;
+  }
+  .lesson-card h2 {
+    font-size: 22px;
+  }
+  .lesson-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .lesson-grid {
+    grid-template-columns: 1fr;
+  }
+  .selection-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .selection-bar select {
+    min-width: 0;
+  }
+  .lesson-steps {
+    gap: 8px;
+  }
+  .lesson-steps li {
+    font-size: 11px;
+  }
+  .lesson-steps b {
+    display: block;
+    margin: 0 0 5px;
+  }
+  .lesson-card h2 {
+    font-size: 26px;
+  }
+  .practice-notes {
+    order: 4;
+  }
+  .lesson-actions > button {
+    width: 100%;
+  }
+}
+
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
@@ -421,7 +754,7 @@ aside {
 }
 .move-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 9px;
 }
 .move-buttons button {
@@ -895,5 +1228,23 @@ h1 {
   }
   .camera-heading > span:last-child {
     display: none;
+  }
+}
+
+.key-points {
+  list-style-type: disc;
+}
+ol.key-points {
+  list-style-type: decimal;
+}
+@media (max-width: 700px) {
+  .header-note {
+    font-size: 0;
+    flex-shrink: 0;
+  }
+  .camera-heading > span:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    line-height: 1.6;
   }
 }

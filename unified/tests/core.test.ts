@@ -6,6 +6,7 @@ import { StreamCoach } from "../packages/coach-core/src/stream";
 import { mapPoint } from "../apps/web/src/pose/overlay";
 import { angle, roundEven } from "../packages/coach-core/src/math";
 import { normalize, visible } from "../packages/coach-core/src/normalize";
+import { expectedHand } from "../packages/coach-core/src/types";
 import type {
   Frame,
   VideoInfo,
@@ -66,16 +67,18 @@ test("overlay contain and mirror use the identical video rectangle", () => {
     y: 0,
   });
 });
-for (const c of examples.filter(
-  (c) => c.move !== "cross" && c.id.endsWith("_normal"),
-))
+for (const c of examples.filter((c) => c.id.endsWith("_normal")))
   test(`live one attempt: ${c.id}`, () => {
     const { reports, max } = replay(c);
     assert.equal(reports.length, 1);
     assert.equal(reports[0].status, "completed");
     assert.ok(max < 200);
   });
-for (const move of ["jab", "hook"] as const) {
+test("cross uses the rear hand in both stances", () => {
+  assert.equal(expectedHand("cross", "orthodox"), "right");
+  assert.equal(expectedHand("cross", "southpaw"), "left");
+});
+for (const move of ["jab", "cross", "hook"] as const) {
   const c = examples.find((c) => c.id === `${move}_orthodox_30_normal`)!;
   test(`two ${move}s counted exactly once each`, () => {
     const frames = [
@@ -100,7 +103,7 @@ for (const move of ["jab", "hook"] as const) {
     const frames = clone(c.frames);
     for (const f of frames)
       if (f.timestamp_ms >= 1000 && f.timestamp_ms <= 1500)
-        f.landmarks.left_wrist.visibility = 0;
+        f.landmarks[`${expectedHand(move, c.stance)}_wrist`].visibility = 0;
     const { reports } = replay(c, frames);
     assert.ok(reports.length >= 1);
     assert.ok(
