@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+private-data/*
+!private-data/README.md
+apps/web/public/wasm/
+apps/web/public/worker/
+.cache/
+publication/
+apps/web/public/models/*.task
+.env*
+playwright-report/
+test-results/

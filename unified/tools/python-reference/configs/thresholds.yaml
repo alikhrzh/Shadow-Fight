@@ -1,0 +1,32 @@
+# Overrides for the packaged defaults in shadowcoach/defaults.yaml.
+# Unlisted values retain their defaults. Unknown keys are rejected.
+# Distances: shoulder widths; speed: shoulder widths/second; angles: degrees.
+pose:
+  min_visibility: 0.5
+  min_keypoint_coverage: 0.7
+  smoothing_alpha: 0.35
+segmentation:
+  min_calibration_ms: 150
+  max_calibration_spread: 0.10
+  movement_speed_threshold: 0.8
+  still_speed_threshold: 0.45
+  confirmation_frames: 3
+jab:
+  min_wrist_displacement: 0.45
+  min_peak_elbow_angle: 145
+  max_guard_distance: 0.70
+  max_return_distance: 0.40
+cross:
+  min_wrist_displacement: 0.50
+  min_peak_elbow_angle: 145
+  min_shoulder_rotation: 0.08
+  max_guard_distance: 0.70
+  max_return_distance: 0.40
+hook:
+  min_horizontal_displacement: 0.30
+  min_peak_elbow_angle: 65
+  max_peak_elbow_angle: 125
+  max_elbow_shoulder_vertical_gap: 0.35
+  min_shoulder_rotation: 0.06
+  max_guard_distance: 0.70
+  max_return_distance: 0.45

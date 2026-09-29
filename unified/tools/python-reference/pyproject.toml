@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shadowcoach-ml"
+version = "0.1.2"
+description = "Offline, rule-based boxing technique analysis with MediaPipe Pose"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "mediapipe>=0.10.21,<0.11",
+  "opencv-contrib-python>=4.8,<4.12",
+  "numpy>=1.26,<2",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6,<7",
+  "Pillow>=10,<13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1"]
+
+[project.scripts]
+shadowcoach = "shadowcoach.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["shadowcoach*"]
+
+[tool.setuptools.package-data]
+shadowcoach = ["defaults.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires a local MediaPipe model (no network)"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".cache", ".python", ".tools", ".venv", "runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

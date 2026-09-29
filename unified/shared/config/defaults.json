@@ -1,0 +1,142 @@
+{
+  "pose": {
+    "min_visibility": 0.5,
+    "min_presence": 0.5,
+    "min_keypoint_coverage": 0.7,
+    "min_peak_coverage": 0.8,
+    "peak_window_ms": 80.0,
+    "multiple_people_frames": 3,
+    "min_shoulder_width": 0.03,
+    "max_shoulder_scale_ratio": 2.5,
+    "min_video_duration_ms": 800.0,
+    "max_video_duration_ms": 30000.0,
+    "min_video_frames": 12,
+    "max_gap_ms": 120.0,
+    "min_detection_confidence": 0.5,
+    "min_tracking_confidence": 0.5,
+    "smoothing_alpha": 0.35,
+    "reference_fps": 30.0,
+    "min_world_coverage": 0.95
+  },
+  "segmentation": {
+    "baseline_window_ms": 1000.0,
+    "calibration_ms": 300.0,
+    "min_calibration_ms": 150.0,
+    "max_calibration_spread": 0.1,
+    "hook_peak_smoothing_ms": 100.0,
+    "hook_min_medial_progress": 0.12,
+    "hook_peak_plateau_tolerance": 0.04,
+    "still_speed_threshold": 0.45,
+    "movement_speed_threshold": 0.8,
+    "min_start_displacement": 0.12,
+    "min_attempt_displacement": 0.25,
+    "confirmation_frames": 3,
+    "confirmation_ms": 65.0,
+    "min_attempt_frames": 5,
+    "max_attempt_duration_ms": 1800.0,
+    "return_hold_ms": 100.0,
+    "active_hand_ratio": 1.25
+  },
+  "feedback": {
+    "max_violations_in_report": 5,
+    "priority": [
+      "wrong_hand",
+      "guard_dropped",
+      "elbow_too_straight",
+      "elbow_too_bent",
+      "elbow_too_low",
+      "insufficient_extension",
+      "low_amplitude",
+      "trajectory_not_straight",
+      "trajectory_too_straight",
+      "no_shoulder_rotation",
+      "not_returned_to_guard",
+      "timing_out_of_range"
+    ]
+  },
+  "scoring": {
+    "extension_zero_angle": 90.0,
+    "extension_good_angle": 170.0,
+    "guard_good_distance": 0.45,
+    "guard_zero_distance": 1.5,
+    "wrong_hand_cap": 35
+  },
+  "jab": {
+    "min_wrist_displacement": 0.45,
+    "min_peak_elbow_angle": 145.0,
+    "max_peak_elbow_angle": 180.0,
+    "max_guard_distance": 0.7,
+    "max_return_distance": 0.4,
+    "min_attempt_duration_ms": 180.0,
+    "max_attempt_duration_ms": 1500.0,
+    "min_horizontal_displacement": null,
+    "min_trajectory_straightness": 0.85,
+    "max_trajectory_straightness": null,
+    "max_elbow_shoulder_vertical_gap": null,
+    "min_shoulder_rotation": null,
+    "weights": {
+      "completion": 0.3,
+      "extension": 0.25,
+      "trajectory": 0.15,
+      "guard": 0.15,
+      "return": 0.15
+    }
+  },
+  "cross": {
+    "min_wrist_displacement": 0.5,
+    "min_peak_elbow_angle": 145.0,
+    "max_peak_elbow_angle": 180.0,
+    "max_guard_distance": 0.7,
+    "max_return_distance": 0.4,
+    "min_attempt_duration_ms": 180.0,
+    "max_attempt_duration_ms": 1600.0,
+    "min_horizontal_displacement": null,
+    "min_trajectory_straightness": null,
+    "max_trajectory_straightness": null,
+    "max_elbow_shoulder_vertical_gap": null,
+    "min_shoulder_rotation": 0.08,
+    "weights": {
+      "completion": 0.25,
+      "extension": 0.25,
+      "rotation": 0.2,
+      "guard": 0.15,
+      "return": 0.15
+    }
+  },
+  "hook": {
+    "min_wrist_displacement": 0.3,
+    "min_peak_elbow_angle": 65.0,
+    "max_peak_elbow_angle": 125.0,
+    "max_guard_distance": 0.7,
+    "max_return_distance": 0.45,
+    "min_attempt_duration_ms": 180.0,
+    "max_attempt_duration_ms": 1800.0,
+    "min_horizontal_displacement": 0.3,
+    "min_trajectory_straightness": null,
+    "max_trajectory_straightness": 0.94,
+    "max_elbow_shoulder_vertical_gap": 0.35,
+    "min_shoulder_rotation": 0.06,
+    "weights": {
+      "completion": 0.2,
+      "elbow_form": 0.2,
+      "elbow_height": 0.1,
+      "trajectory": 0.1,
+      "rotation": 0.1,
+      "guard": 0.15,
+      "return": 0.15
+    }
+  },
+  "render": {
+    "codecs": [
+      "avc1",
+      "mp4v"
+    ],
+    "font_path": null,
+    "highlight_window_ms": 150.0,
+    "debug_stride": 5,
+    "panel_height": 190
+  },
+  "model": {
+    "path": "models/pose_landmarker_full.task"
+  }
+}
