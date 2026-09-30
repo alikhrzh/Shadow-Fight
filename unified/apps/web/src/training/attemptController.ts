@@ -8,17 +8,21 @@ import type {
   Stance,
 } from "../../../../packages/coach-core/src/types";
 import { body, guardVisible } from "../gestures/geometry";
+import { JabCapture } from "./jabCapture";
 export type CaptureMode = "observe" | "calibrate" | "capture";
 export class AttemptController {
   private coach: StreamCoach;
+  private jab: JabCapture | null;
   private id: string | null = null;
   private calibrated = false;
   private finished = false;
   constructor(move: Move, stance: Stance) {
     this.coach = new StreamCoach(move, stance);
+    this.jab = move === "jab" ? new JabCapture(stance) : null;
   }
   reset() {
     this.coach.reset();
+    this.jab?.reset();
     this.id = null;
     this.calibrated = false;
     this.finished = false;
@@ -45,6 +49,13 @@ export class AttemptController {
       this.id = id;
     }
     if (this.finished) return idle;
+    if (this.jab) {
+      if (mode === "capture" && !this.calibrated) return idle;
+      const u = this.jab.push(frame, width, height, mode === "capture");
+      if (mode === "calibrate") this.calibrated = u.phase === "ready";
+      if (u.result) this.finished = true;
+      return u;
+    }
     if (mode === "calibrate") {
       if (!guardVisible(body(frame, width, height))) {
         this.coach.reset();

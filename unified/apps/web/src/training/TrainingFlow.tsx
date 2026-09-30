@@ -6,6 +6,7 @@ import {
   type Stance,
 } from "../../../../packages/coach-core/src/types";
 import { messages } from "../../../../packages/coach-core/src/evaluate";
+import type { LivePhase } from "../../../../packages/coach-core/src/stream";
 import {
   initialTraining,
   trainingReducer,
@@ -21,8 +22,9 @@ import { body } from "../gestures/geometry";
 import { detectHandsUp } from "../gestures/detectHandsUp";
 import { detectCrossedArms } from "../gestures/detectCrossedArms";
 import { emptyHold, gestureHold } from "../gestures/gestureHold";
-import { cameraQuality } from "./cameraQuality";
+import { cameraQuality, gestureCameraQuality } from "./cameraQuality";
 import { Countdown } from "./Countdown";
+import { CAPTURE_WAIT_MS, captureWaitRemaining } from "./captureDeadline";
 import { FeedbackPanel } from "../feedback/FeedbackPanel";
 import { safePayload } from "../feedback/safePayload";
 import { requestFeedback } from "../feedback/feedbackClient";
@@ -32,6 +34,14 @@ import {
   saveProgress,
   clearProgress,
 } from "../progress/progressStore";
+
+const emptyGestureView = () => ({
+  up: 0,
+  cross: 0,
+  raised: false,
+  problem: null as string | null,
+  attemptProblem: null as string | null,
+});
 
 export function TrainingFlow() {
   const [t, dispatch] = useReducer(trainingReducer, initialTraining),
@@ -45,7 +55,12 @@ export function TrainingFlow() {
   const [hint, setHint] = useState(
     "Встаньте в боксерскую стойку. Покажите голову, плечи, локти и обе кисти.",
   );
-  const [holds, setHolds] = useState({ up: 0, cross: 0 });
+  const [holds, setHolds] = useState(emptyGestureView);
+  const [captureView, setCaptureView] = useState({
+    phase: "ready" as LivePhase,
+    message: "Один удар — затем верните руку и задержитесь в защите.",
+  });
+  const motionObservedAt = useRef<number | null>(null);
   const up = useRef(emptyHold()),
     cross = useRef(emptyHold()),
     goodSince = useRef<number | null>(null);
@@ -70,7 +85,12 @@ export function TrainingFlow() {
       up.current = emptyHold();
       cross.current = emptyHold();
       goodSince.current = null;
-      setHolds({ up: 0, cross: 0 });
+      setHolds(emptyGestureView());
+      motionObservedAt.current = null;
+      setCaptureView({
+        phase: "ready",
+        message: "Один удар — затем верните руку и задержитесь в защите.",
+      });
     }
     if (!cameraActive(next.state)) {
       void audio.current?.close().catch(() => {});
@@ -99,30 +119,50 @@ export function TrainingFlow() {
     if (t.state !== "calibrating_guard" && t.state !== "capturing_attempt")
       return;
     const attemptId = t.attemptId!;
-    const timer = window.setTimeout(
-      () => {
-        if (t.state === "calibrating_guard")
-          send({ type: "PREPARATION_TIMEOUT", attemptId });
-        else {
-          const report: Report = {
-            status: "no_attempt",
-            expected_move: t.move,
-            stance: t.stance,
-            score: null,
-            phases: emptyPhases(),
-            peak_method: null,
-            violations: [],
-            quality: { issues: [] },
-            metrics: null,
-            score_components: {},
-            effective_weights: {},
-            main_feedback:
-              "Удар не обнаружен. После «БЕЙ!» выполните один отчётливый удар и верните руку к подбородку. Повторите подготовку.",
-          };
-          send({ type: "REPORT", attemptId, report });
+    const waitStarted = performance.now();
+    let timer: number;
+    const timedOut = () => {
+      if (
+        current.current.attemptId !== attemptId ||
+        current.current.state !== t.state
+      )
+        return;
+      if (t.state === "calibrating_guard")
+        send({ type: "PREPARATION_TIMEOUT", attemptId });
+      else {
+        const started = t.move === "jab" ? motionObservedAt.current : null;
+        const remaining = captureWaitRemaining(
+          waitStarted,
+          started,
+          performance.now(),
+        );
+        if (remaining > 0) {
+          timer = window.setTimeout(timedOut, Math.ceil(remaining));
+          return;
         }
-      },
-      t.state === "calibrating_guard" ? 10000 : 8000,
+        const report: Report = {
+          status: started === null ? "no_attempt" : "unreliable",
+          expected_move: t.move,
+          stance: t.stance,
+          score: null,
+          phases: emptyPhases(),
+          peak_method: null,
+          violations: [],
+          quality: { issues: [] },
+          metrics: null,
+          score_components: {},
+          effective_weights: {},
+          main_feedback:
+            started === null
+              ? "Удар не обнаружен. После «БЕЙ!» выполните один отчётливый удар и верните руку к подбородку. Повторите подготовку."
+              : "Начало удара обнаружено, но завершение не подтверждено. Проверьте видимость рук и повторите подготовку.",
+        };
+        send({ type: "REPORT", attemptId, report });
+      }
+    };
+    timer = window.setTimeout(
+      timedOut,
+      t.state === "calibrating_guard" ? 10000 : CAPTURE_WAIT_MS,
     );
     return () => clearTimeout(timer);
   }, [t.state, t.attemptId, t.move, t.stance, send]);
@@ -171,16 +211,19 @@ export function TrainingFlow() {
       if (!cameraActive(s.state) || data.attemptId !== s.attemptId) return;
       const now = data.frame.timestamp_ms;
       const problem = cameraQuality(data.frame, data.fps, data.dark);
+      const gestureProblem = gestureCameraQuality(
+        data.frame,
+        data.fps,
+        data.dark,
+        data.width,
+        data.height,
+      );
       if (["camera_setup", "waiting_for_start_gesture"].includes(s.state)) {
-        if (problem) goodSince.current = null;
+        if (gestureProblem) goodSince.current = null;
         else goodSince.current ??= now;
         const good =
           goodSince.current !== null && now - goodSince.current >= 350;
         send({ type: "POSITION", good });
-        setHint(
-          problem ??
-            "Готовы? Поднимите обе руки над головой и удерживайте 1 секунду.",
-        );
       }
       if (s.state === "calibrating_guard" && data.mode === "calibrate") {
         setHint(problem ?? data.live.message);
@@ -198,25 +241,45 @@ export function TrainingFlow() {
           report: data.live.result,
         });
       }
-      if (exitGestureAllowed(s.state)) {
+      if (
+        s.state === "capturing_attempt" &&
+        data.mode === "capture" &&
+        s.move === "jab"
+      ) {
+        if (data.live.phase === "punch" || data.live.phase === "return")
+          motionObservedAt.current ??= performance.now();
+        setCaptureView((previous) =>
+          previous.phase === data.live.phase &&
+          previous.message === data.live.message
+            ? previous
+            : { phase: data.live.phase, message: data.live.message },
+        );
+      }
+      if (exitGestureAllowed(s.state) || startAllowed(s.state)) {
         const p = body(data.frame, data.width, data.height);
         const crossed = gestureHold(
           cross.current,
-          detectCrossedArms(p, cross.current.held > 0),
+          exitGestureAllowed(s.state) &&
+            detectCrossedArms(p, cross.current.held > 0),
           now,
           1350,
         );
         cross.current = crossed.state;
+        const raisedPose = detectHandsUp(p, up.current.held > 0);
         const raised = gestureHold(
           up.current,
-          startAllowed(s.state) &&
-            !problem &&
-            detectHandsUp(p, up.current.held > 0),
+          startAllowed(s.state) && !gestureProblem && raisedPose,
           now,
           950,
         );
         up.current = raised.state;
-        setHolds({ up: raised.progress, cross: crossed.progress });
+        setHolds({
+          up: raised.progress,
+          cross: crossed.progress,
+          raised: raisedPose,
+          problem: gestureProblem,
+          attemptProblem: problem,
+        });
         if (crossed.fired) exit();
         else if (raised.fired) start();
       } else {
@@ -243,8 +306,9 @@ export function TrainingFlow() {
       : t.state === "capturing_attempt"
         ? "capture"
         : "observe";
-  const repeatable = startAllowed(t.state) || t.state === "ai_analysis";
-  const showGestures = exitGestureAllowed(t.state);
+  const repeatable = startAllowed(t.state);
+  const showExitGesture = exitGestureAllowed(t.state);
+  const showGestures = showExitGesture || repeatable;
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -517,10 +581,21 @@ export function TrainingFlow() {
               <div className="training-cue" role="status">
                 {t.state === "capturing_attempt" ? (
                   <>
-                    <strong>БЕЙ!</strong>
-                    <p>
-                      Защита зафиксирована. Один удар — затем верните руку и
-                      задержитесь в защите.
+                    <strong>
+                      {t.move !== "jab" || captureView.phase === "ready"
+                        ? "БЕЙ!"
+                        : captureView.phase === "calibrating"
+                          ? "В ЗАЩИТУ"
+                          : captureView.phase === "recovering"
+                            ? "ПАУЗА"
+                            : captureView.phase === "return"
+                              ? "ВОЗВРАТ"
+                              : "УДАР"}
+                    </strong>
+                    <p data-testid="capture-hint">
+                      {t.move === "jab"
+                        ? captureView.message
+                        : "Защита зафиксирована. Один удар — затем верните руку и задержитесь в защите."}
                     </p>
                   </>
                 ) : t.state === "calibrating_guard" ? (
@@ -534,14 +609,28 @@ export function TrainingFlow() {
                     <h2>
                       {t.report ? "Ещё одна попытка?" : "Подготовка камеры"}
                     </h2>
-                    <p>
-                      {t.report
-                        ? "Поднимите обе руки над головой на 1 секунду для повтора."
-                        : hint}
+                    <p data-testid="start-gesture-hint">
+                      {holds.problem ??
+                        (holds.raised
+                          ? "Руки распознаны. Удерживайте их над головой до заполнения индикатора."
+                          : t.report
+                            ? "Для повтора поднимите обе кисти выше головы и локти выше плеч. Удерживайте 1 секунду."
+                            : "Поднимите обе кисти выше головы и локти выше плеч. Удерживайте 1 секунду.")}
                     </p>
-                    <p>
-                      Для выхода скрестите предплечья у груди на 1,4 секунды.
-                    </p>
+                    {!holds.problem && holds.attemptProblem && (
+                      <p data-testid="attempt-framing-hint">
+                        Жест запуска доступен. Для оценки удара:{" "}
+                        {holds.attemptProblem}
+                      </p>
+                    )}
+                    {t.state === "ai_analysis" && (
+                      <p>Повтор отменит текущий AI-разбор.</p>
+                    )}
+                    {showExitGesture && (
+                      <p>
+                        Для выхода скрестите предплечья у груди на 1,4 секунды.
+                      </p>
+                    )}
                   </>
                 ) : null}
                 {t.error && active && <p>{t.error}</p>}
@@ -556,14 +645,16 @@ export function TrainingFlow() {
                       aria-label="Удержание рук над головой"
                     />
                   </label>
-                  <label>
-                    Крест руками
-                    <progress
-                      max={1}
-                      value={holds.cross}
-                      aria-label="Удержание креста руками"
-                    />
-                  </label>
+                  {showExitGesture && (
+                    <label>
+                      Крест руками
+                      <progress
+                        max={1}
+                        value={holds.cross}
+                        aria-label="Удержание креста руками"
+                      />
+                    </label>
+                  )}
                 </div>
               )}
             </section>

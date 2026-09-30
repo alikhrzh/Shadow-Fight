@@ -1,4 +1,5 @@
 import type { Training } from "../training/trainingMachine";
+import { captureSummary, qualitySummary } from "./qualitySummary";
 const names: Record<string, string> = {
   completion: "Амплитуда",
   return: "Возврат",
@@ -28,13 +29,22 @@ export function FeedbackPanel({ training: t }: { training: Training }) {
         {r.status === "completed"
           ? "Достаточно данных для локальной оценки"
           : r.status === "no_attempt"
-            ? "Движение не обнаружено"
+            ? "Удар не выделен"
             : "Ненадёжная попытка — оценка не выдана"}
       </p>
-      <h3>{r.main_feedback}</h3>
-      {r.quality.issues.map((i, index) => (
-        <p key={`${i.code}-${index}`}>{i.message}</p>
-      ))}
+      {captureSummary(r) && (
+        <p data-testid="capture-summary">{captureSummary(r)}</p>
+      )}
+      <h3>
+        {r.capture && r.status !== "completed"
+          ? "Оценка недоступна: запись недостаточно надёжна."
+          : r.main_feedback}
+      </h3>
+      {qualitySummary(r)
+        .filter((message) => !!r.capture || message !== r.main_feedback)
+        .map((message) => (
+          <p key={message}>{message}</p>
+        ))}
       <dl className="score-components">
         {Object.entries(r.score_components).map(([key, value]) => (
           <div key={key}>

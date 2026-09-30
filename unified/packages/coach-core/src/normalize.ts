@@ -15,7 +15,11 @@ export function visible(p: Point | undefined, image = true): boolean {
     (!image || (p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1))
   );
 }
-export function normalize(frames: Frame[], info: VideoInfo): Normalized[] {
+export function normalize(
+  frames: Frame[],
+  info: VideoInfo,
+  options: { allowImageForeshortening?: boolean } = {},
+): Normalized[] {
   if (!frames.length) return [];
   const widths: number[] = [],
     worldWidths: number[] = [];
@@ -70,7 +74,12 @@ export function normalize(frames: Frame[], info: VideoInfo): Normalized[] {
             space === "image" ? b.slice(0, 2) : b,
           ) / scale;
         if (
-          current >= 1 / cfg.pose.max_shoulder_scale_ratio &&
+          // Capture may follow a turning torso using the frozen guard scale.
+          // Grading keeps the original scale-ratio rejection, by default.
+          (current >= 1 / cfg.pose.max_shoulder_scale_ratio ||
+            (space === "image" &&
+              options.allowImageForeshortening === true &&
+              current > Number.EPSILON)) &&
           current <= cfg.pose.max_shoulder_scale_ratio
         ) {
           const center = a.map((x, i) => (x + b[i]) / 2);

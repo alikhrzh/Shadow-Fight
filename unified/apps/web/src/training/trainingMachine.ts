@@ -57,7 +57,7 @@ export type Event =
 export const exitGestureAllowed = (s: TrainingState) =>
   ["camera_setup", "waiting_for_start_gesture", "result"].includes(s);
 export const startAllowed = (s: TrainingState) =>
-  ["waiting_for_start_gesture", "result"].includes(s);
+  ["waiting_for_start_gesture", "ai_analysis", "result"].includes(s);
 export const cameraActive = (s: TrainingState) =>
   !["selecting_move", "lesson", "camera_error"].includes(s);
 export function trainingReducer(s: Training, e: Event): Training {
@@ -86,8 +86,7 @@ export function trainingReducer(s: Training, e: Event): Training {
         ? { ...s, state: e.good ? "waiting_for_start_gesture" : "camera_setup" }
         : s;
     case "START":
-      return (startAllowed(s.state) || s.state === "ai_analysis") &&
-        e.attemptId !== s.attemptId
+      return startAllowed(s.state) && e.attemptId !== s.attemptId
         ? {
             ...s,
             state: "countdown",

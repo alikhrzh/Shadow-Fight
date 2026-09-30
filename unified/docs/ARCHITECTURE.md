@@ -9,7 +9,7 @@ in flight; pending frames are not queued. Every bitmap is closed by the worker.
 ## Data flow
 
 Camera → new video frame → transferable bitmap → MediaPipe Full → raw image/world
-landmarks → AttemptController → StreamCoach → final report. Landmarks return to the main thread for
+landmarks → AttemptController → JabCapture (jab) / StreamCoach (cross, hook) → final report. Landmarks return to the main thread for
 rendering; raw pixels and coordinates are never sent to a server.
 
 `requestVideoFrameCallback` is preferred, with rAF + video.currentTime de-duplication
@@ -89,9 +89,42 @@ results for gestures, but the worker no longer feeds frames to StreamCoach.
 
 `AttemptController` wraps the existing core without changing scoring or handedness.
 Observe mode never grades; calibration accepts only visible guard poses, requiring
-the existing core's baseline. Capture continues that baseline until one final
-report, after which a latch blocks further grading. Countdown arm lowering is not
-in the baseline. Preparation times out after 10 seconds; missing movement after 8.
+the existing core's baseline. Cross/hook continue to use StreamCoach unchanged.
+For jab, `JabCapture` separates motion boundaries from grading reliability: a
+confirmed single-hand outward movement from guard starts capture, not downward
+arm lowering or simultaneous raised hands. Either anatomical hand can move;
+wrong-hand grading still belongs to the core. Loss of the guard arm does not
+discard the moving arm's trajectory. Raw missing observations remain in the
+recording and may make the final report unreliable. No confidence is invented.
+
+Jab capture reuses normalization with explicit `allowImageForeshortening`: the
+initial shoulder scale stays fixed when a turn narrows the projected shoulders.
+Coincident/missing anchors and excessive scale growth remain invalid. Default
+normalization used by `analyze`, geometry and all other callers stays strict;
+scoring thresholds, features and weights are unchanged. A captured movement is
+not necessarily gradable.
+
+A jab finishes at the first compact confirmed return, subsequent lowering, the
+bounded motion timeout, or loss of essential tracking. The return hold retains
+the trailing stable window during deceleration. Critical missing points/person
+absence get at most the existing 120ms gap tolerance; multiple people, a long
+timestamp gap or changed dimensions abort capture. Idle history is 700ms; total
+retention is capped at 512 frames. `Report.capture` contains local source
+timestamps, active hand and termination, not technique metrics. It is excluded
+from the AI payload and persisted progress. The final-report latch still blocks
+a second attempt until a fresh user command/ID.
+
+Preparation times out after 10 seconds; missing movement after 8. A jab observed
+near the end of that wait gets a bounded 2.5s from its first live onset message
+to finish (at most about 10.5s total). This watchdog records onset once, uses
+wall time, and cannot be extended by each frame. An observed but unfinished
+attempt is unreliable, not falsely described as no motion. Timers clear on exit
+and new attempt IDs.
+
+The UI distinguishes capture completion from score availability, identifies
+unreliable anatomical joints, merges repeated quality issues, and displays
+recovery instructions while waiting for a fresh guard. Low-confidence overlay
+points remain hidden: capture tolerance does not create fake visible points.
 
 Gestures reuse the core's visibility checks and aspect-corrected shoulder scale.
 Hands must be above the nose by a head margin, with elbows above shoulders. A cross
@@ -99,6 +132,20 @@ requires wrists near opposite shoulders and strict forearm-segment intersection.
 Temporal holds accumulate only observed positive time (950/1350 ms), tolerate 160 ms
 missing observations, reset on long gaps, use geometric hysteresis and a 1800 ms
 cooldown/release latch. Exit gestures are disabled from countdown through AI wait.
+
+Hands-up start/retry uses `gestureCameraQuality`: one person, adequate light/FPS,
+visible in-frame nose/shoulders/elbows/wrists and the existing normalization floor.
+It does not use the punch-framing width interval (0.12–0.48). `cameraQuality`
+remains unchanged and still gates guard calibration before capture. The UI shows
+command-tracking failures and insufficient hold separately from punch-framing
+advice, including on the result screen. A valid command is not a claim that the
+camera framing is ready to grade technique.
+
+Hands-up retry is also accepted during `ai_analysis`, just like the retry button.
+START aborts the old AI request synchronously, creates a fresh attempt ID and
+clears the report; stale responses cannot replace the new attempt. This does not
+enable either command during countdown/calibration/capture, or the exit gesture
+during AI wait.
 
 Exit, hidden document and errors revoke attempt identity. Cleanup terminates the
 worker, stops all tracks, cancels callbacks/timers, clears canvas and removes

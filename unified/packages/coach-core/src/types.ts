@@ -58,6 +58,14 @@ export interface Violation extends Issue {
 }
 export type Metrics = Record<string, number | string | boolean | null>;
 export interface Report {
+  /** Local live-capture boundaries, not a technique score or inferred landmarks. */
+  capture?: {
+    active_hand: Hand;
+    onset_ms: number;
+    peak_ms: number;
+    end_ms: number;
+    termination: "returned" | "lowered" | "timeout" | "tracking_lost";
+  };
   status: "completed" | "unreliable" | "no_attempt";
   expected_move: Move;
   stance: Stance;
