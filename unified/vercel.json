@@ -1,6 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run model:download && npm run build",
   "outputDirectory": "apps/web/dist",
   "framework": null,
-  "functions": { "api/coach-feedback.ts": { "maxDuration": 30 } }
+  "functions": { "api/coach-feedback.ts": { "maxDuration": 30 } },
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://shadow-fight-nc8t.onrender.com/api/v1/:path*"
+    }
+  ]
 }
