@@ -1,0 +1,1 @@
+"""ShadowCoach backend service."""

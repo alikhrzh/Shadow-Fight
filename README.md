@@ -138,6 +138,13 @@ npx playwright test
 - `packages/coach-core`, `shared/config/defaults.json`: исходные правила и пороги.
 - `api/coach-feedback.ts`, `shared/feedback.ts`: сервер NVIDIA и проверка данных.
 - `tests`, `browser-tests`, `tools/python-reference`: проверки и Python-эталон.
+- `backend`: отдельный FastAPI-сервис для аккаунтов, истории попыток и прогресса.
+
+Backend следует clean architecture, хранит только агрегированный отчёт и не принимает
+видео или landmarks. Быстрый запуск, API-контракт и production-требования описаны в
+[`backend/README.md`](unified/backend/README.md). Текущий локальный анализ и NVIDIA
+fallback продолжают работать без аккаунта; подключение frontend к новому API выполняется
+отдельно.
 
 Подробнее: [архитектура](unified/docs/ARCHITECTURE.md),
 [тестирование и реальные ограничения](unified/docs/TESTING.md),

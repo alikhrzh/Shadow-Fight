@@ -18,3 +18,5 @@ apps/web/public/models/*.task
 !.env.example
 playwright-report/
 test-results/
+backend/*.db
+backend/*.db-*
