@@ -153,7 +153,7 @@ Worker обрабатывает один кадр за раз без накоп�
 - **Frontend:** React 18, TypeScript, Vite, CSS/Tailwind CSS, Lucide React, Web Audio API.
 - **Computer vision:** MediaPipe Tasks Vision 0.10.14, Pose Landmarker Full, WebAssembly, Web Worker, Canvas, `getUserMedia`.
 - **Оценка техники:** TypeScript `coach-core`, геометрические и временные правила, общая JSON-конфигурация, Python-эталон.
-- **Backend, опционально:** Python 3.12–3.14, FastAPI, SQLAlchemy, Alembic, PostgreSQL 17, JWT, Argon2. Docker-образ использует Python 3.13; тесты API — SQLite.
+- **Backend аккаунта:** Python 3.12–3.14, FastAPI, SQLAlchemy, Alembic, PostgreSQL, JWT, Argon2. Docker-образ использует Python 3.13; тесты API — SQLite. Для гостевой тренировки backend не обязателен.
 - **AI-пояснения, опционально:** NVIDIA NIM, серверный endpoint Node.js; модель по умолчанию `meta/llama-3.3-70b-instruct`.
 - **Проверки:** Node.js Test Runner, Playwright, TypeScript, pytest, Ruff, сравнение с Python-эталоном и аудит production-файлов.
 
@@ -206,9 +206,11 @@ Compose содержит **только development-настройки**. Для
 
 При необходимости создайте `unified/.env.local` по [`.env.example`](unified/.env.example), не перезаписывая существующий файл с настройками. Задайте ключ локально и перезапустите Vite. `npm run dev` обслуживает `/api/coach-feedback` серверным middleware; FastAPI не нужен для NVIDIA-пояснений.
 
-Для Vercel выберите **Root Directory: `unified`**. [vercel.json](unified/vercel.json) задаёт загрузку модели, сборку и каталог `apps/web/dist`; NVIDIA-переменные задаются на сервере. FastAPI размещается отдельно. [Инструкция публикации](unified/docs/DEPLOYMENT.md).
+Production-стенд доступен на **[shadow-fight-unified.vercel.app](https://shadow-fight-unified.vercel.app/)**. Vercel обслуживает frontend и `/api/coach-feedback`, а `/api/v1/*` проксирует на FastAPI в Render; серверная история хранится в PostgreSQL. Благодаря same-origin proxy `VITE_API_BASE_URL` в Vercel остаётся пустым, а refresh token хранится в Secure HttpOnly-cookie. Readiness backend можно проверить по адресу [`/health/ready`](https://shadow-fight-nc8t.onrender.com/health/ready).
 
-`npm run preview` показывает собранный интерфейс, но не запускает NVIDIA endpoint и не наследует dev-proxy FastAPI. Для полного production-сценария настройте серверные маршруты или `VITE_API_BASE_URL` и подходящую политику CORS/cookie. Статический интерфейс может работать с локальным анализом и fallback.
+Для нового Vercel-проекта выберите **Root Directory: `unified`**. [vercel.json](unified/vercel.json) задаёт загрузку модели, сборку, каталог `apps/web/dist` и адрес Render API; при создании другого backend обновите destination rewrite. NVIDIA-переменные задаются только на сервере. [Инструкция публикации](unified/docs/DEPLOYMENT.md).
+
+`npm run preview` показывает собранный интерфейс, но не запускает NVIDIA endpoint и не наследует dev-proxy FastAPI. Локальная тренировка при этом остаётся доступной. Free Render Web Service засыпает после периода без входящих запросов, поэтому первый вход или запрос истории после простоя может занять около минуты; перед демонстрацией откройте readiness endpoint. Free PostgreSQL рассчитан на временный стенд, истекает через 30 дней и не имеет backups.
 
 ## Переменные окружения
 
@@ -363,4 +365,3 @@ unified/
 В Git первая фиксация — `a128fd2` от 29.09.2026, 17:48 (UTC+5). В проекте есть Python-эталон, на который опирается TypeScript-оценщик. Дата первого коммита сама по себе не доказывает время создания исходников. История сохранена; текущий README не утверждает, что все последующие изменения были готовы до дедлайна кейса.
 
 **Ссылка для сдачи:** [github.com/alikhrzh/Shadow-Fight](https://github.com/alikhrzh/Shadow-Fight) — корень репозитория с этим README, не вложенная папка `unified`.
-
