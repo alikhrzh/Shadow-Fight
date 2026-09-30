@@ -9,7 +9,7 @@ in flight; pending frames are not queued. Every bitmap is closed by the worker.
 ## Data flow
 
 Camera → new video frame → transferable bitmap → MediaPipe Full → raw image/world
-landmarks → AttemptController → JabCapture (jab) / StreamCoach (cross, hook) → final report. Landmarks return to the main thread for
+landmarks → AttemptController → PunchCapture (jab, cross, hook) → final report. Landmarks return to the main thread for
 rendering; raw pixels and coordinates are never sent to a server.
 
 `requestVideoFrameCallback` is preferred, with rAF + video.currentTime de-duplication
@@ -48,7 +48,10 @@ promised to match Python's model run. The 142 parity cases compare identical inp
 References: [NormalizedLandmark](https://developers.google.com/edge/api/mediapipe/js/tasks-vision.normalizedlandmark),
 [Landmark](https://developers.google.com/edge/api/mediapipe/js/tasks-vision.landmark).
 
-## Live segmentation
+## Reference streaming core
+
+This section describes the retained `StreamCoach` reference component, not the
+application's current `PunchCapture` gate described under the training flow below.
 
 An idle pre-roll retains 700 ms, requires at least 500 ms of context and a valid
 compact wrist calibration. Movement onset is independent of the hook peak, so the
@@ -85,36 +88,45 @@ camera request → setup → hands-up → countdown → guard calibration → on
 local analysis → optional AI explanation → result. Buttons provide alternatives.
 Every countdown creates a local UUID. Frame messages echo their UUID and capture
 mode; the reducer rejects late worker/AI events. The camera stays mounted through
-results for gestures, but the worker no longer feeds frames to StreamCoach.
+results for gestures, but observe mode resets the punch capture without grading.
 
 `AttemptController` wraps the existing core without changing scoring or handedness.
 Observe mode never grades; calibration accepts only visible guard poses, requiring
-the existing core's baseline. Cross/hook continue to use StreamCoach unchanged.
-For jab, `JabCapture` separates motion boundaries from grading reliability: a
+the existing core's baseline. `PunchCapture` separates motion boundaries from grading reliability: a
 confirmed single-hand outward movement from guard starts capture, not downward
 arm lowering or simultaneous raised hands. Either anatomical hand can move;
 wrong-hand grading still belongs to the core. Loss of the guard arm does not
 discard the moving arm's trajectory. Raw missing observations remain in the
 recording and may make the final report unreliable. No confidence is invented.
 
-Jab capture reuses normalization with explicit `allowImageForeshortening`: the
+Punch capture reuses normalization with explicit `allowImageForeshortening`: the
 initial shoulder scale stays fixed when a turn narrows the projected shoulders.
 Coincident/missing anchors and excessive scale growth remain invalid. Default
 normalization used by `analyze`, geometry and all other callers stays strict;
 scoring thresholds, features and weights are unchanged. A captured movement is
 not necessarily gradable.
 
-A jab finishes at the first compact confirmed return, subsequent lowering, the
+A punch finishes at the first compact confirmed return, subsequent lowering, the
 bounded motion timeout, or loss of essential tracking. The return hold retains
 the trailing stable window during deceleration. Critical missing points/person
 absence get at most the existing 120ms gap tolerance; multiple people, a long
-timestamp gap or changed dimensions abort capture. Idle history is 700ms; total
+timestamp gap or changed dimensions abort capture. Jab/cross idle history is
+700ms until a candidate/preparation starts. Hook keeps the confirmed guard
+through its wind-up; total
 retention is capped at 512 frames. `Report.capture` contains local source
 timestamps, active hand and termination, not technique metrics. It is excluded
 from the AI payload and persisted progress. The final-report latch still blocks
 a second attempt until a fresh user command/ID.
 
-Preparation times out after 10 seconds; missing movement after 8. A jab observed
+Cross/hook permit a bounded transition out of guard. If both hands move, one must
+dominate by the existing active-hand ratio. A hook requires an inward sweep plus
+elbow movement relative to its shoulder; wind-up alone is not a punch. Its peak
+uses the existing anatomical medial-axis `hookPeak`, never the wind-up's largest
+radial displacement. `JabCapture` remains a compatibility entry point. Cross/hook
+can also preserve an already confirmed guard through a pose absence under 120ms;
+longer absence requires calibration again, and missing observations are retained.
+
+Preparation times out after 10 seconds; missing movement after 8. Any punch observed
 near the end of that wait gets a bounded 2.5s from its first live onset message
 to finish (at most about 10.5s total). This watchdog records onset once, uses
 wall time, and cannot be extended by each frame. An observed but unfinished

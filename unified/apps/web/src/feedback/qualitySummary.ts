@@ -32,9 +32,9 @@ export function qualitySummary(report: Report): string[] {
 export function captureSummary(report: Report): string | null {
   switch (report.capture?.termination) {
     case "returned":
-      return "Попытка выделена: начало, пик движения и возврат в защиту.";
+      return "Попытка выделена: начало, пик и обратное движение руки. Полный возврат в защиту оценивается отдельно.";
     case "lowered":
-      return "Рука опущена без подтверждённого возврата в защиту.";
+      return "Запись попытки завершена при опускании руки.";
     case "timeout":
       return "Начало попытки обнаружено. Возврат не подтверждён до окончания времени.";
     case "tracking_lost":

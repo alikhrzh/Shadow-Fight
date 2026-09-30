@@ -130,7 +130,7 @@ export function TrainingFlow() {
       if (t.state === "calibrating_guard")
         send({ type: "PREPARATION_TIMEOUT", attemptId });
       else {
-        const started = t.move === "jab" ? motionObservedAt.current : null;
+        const started = motionObservedAt.current;
         const remaining = captureWaitRemaining(
           waitStarted,
           started,
@@ -241,11 +241,7 @@ export function TrainingFlow() {
           report: data.live.result,
         });
       }
-      if (
-        s.state === "capturing_attempt" &&
-        data.mode === "capture" &&
-        s.move === "jab"
-      ) {
+      if (s.state === "capturing_attempt" && data.mode === "capture") {
         if (data.live.phase === "punch" || data.live.phase === "return")
           motionObservedAt.current ??= performance.now();
         setCaptureView((previous) =>
@@ -582,7 +578,7 @@ export function TrainingFlow() {
                 {t.state === "capturing_attempt" ? (
                   <>
                     <strong>
-                      {t.move !== "jab" || captureView.phase === "ready"
+                      {captureView.phase === "ready"
                         ? "БЕЙ!"
                         : captureView.phase === "calibrating"
                           ? "В ЗАЩИТУ"
@@ -592,11 +588,7 @@ export function TrainingFlow() {
                               ? "ВОЗВРАТ"
                               : "УДАР"}
                     </strong>
-                    <p data-testid="capture-hint">
-                      {t.move === "jab"
-                        ? captureView.message
-                        : "Защита зафиксирована. Один удар — затем верните руку и задержитесь в защите."}
-                    </p>
+                    <p data-testid="capture-hint">{captureView.message}</p>
                   </>
                 ) : t.state === "calibrating_guard" ? (
                   <>
@@ -699,8 +691,8 @@ export function TrainingFlow() {
           <p>
             ShadowCoach — образовательный прототип. Он анализирует ограниченный
             набор визуально измеримых признаков по одной камере. Не измеряет
-            силу удара и не заменяет тренера. Кросс пока проверен только на
-            синтетических данных.
+            силу удара и не заменяет тренера. Точность на новых людях и ракурсах
+            ещё не подтверждена.
           </p>
         </footer>
       </main>

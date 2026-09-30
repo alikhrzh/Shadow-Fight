@@ -54,3 +54,23 @@ test("a lost boundary is never presented as a completed capture", () => {
     /полные границы не восстановлены/,
   );
 });
+test("capture completion does not claim a technically correct return", () => {
+  const result = {
+    ...report,
+    capture: {
+      active_hand: "left" as const,
+      onset_ms: 100,
+      peak_ms: 200,
+      end_ms: 300,
+      termination: "returned" as const,
+    },
+  };
+  assert.match(captureSummary(result)!, /оценивается отдельно/);
+  assert.match(
+    captureSummary({
+      ...result,
+      capture: { ...result.capture, termination: "lowered" },
+    })!,
+    /при опускании/,
+  );
+});

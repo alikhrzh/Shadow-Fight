@@ -160,8 +160,16 @@ async function mockCamera(
             motionFrame >= 32 &&
             motionFrame <= 43
           ) {
-            frame.landmarks.right_wrist.visibility = 0.1;
-            frame.landmarks.right_elbow.visibility = 0.1;
+            const lead = this.sample.stance === "orthodox" ? "left" : "right";
+            const active =
+              this.sample.move === "cross"
+                ? lead === "left"
+                  ? "right"
+                  : "left"
+                : lead;
+            const guard = active === "left" ? "right" : "left";
+            frame.landmarks[`${guard}_wrist`].visibility = 0.1;
+            frame.landmarks[`${guard}_elbow`].visibility = 0.1;
           }
           if (w.testPose === "up")
             for (const side of ["left", "right"]) {
@@ -262,130 +270,141 @@ async function stopped(page: Page) {
   ).toBe(true);
   expect(await page.evaluate(() => (window as any).testWorkers)).toBe(0);
 }
-test("real jab controller: lowering is preparation, recovery captures exactly one later jab", async ({
-  page,
-}) => {
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await mockCamera(page, true, true);
-  let calls = 0;
-  await page.route("**/api/coach-feedback", async (route) => {
-    calls++;
-    expect(JSON.stringify(route.request().postDataJSON())).not.toMatch(
-      /capture|onset_ms|landmarks/,
+for (const [move, key] of [
+  ["Джеб", "jab"],
+  ["Кросс", "cross"],
+  ["Передний боковой", "hook"],
+])
+  test(`real ${key} controller: lowering is preparation, recovery captures exactly one later punch`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await mockCamera(page, true, true);
+    let calls = 0;
+    await page.route("**/api/coach-feedback", async (route) => {
+      calls++;
+      expect(JSON.stringify(route.request().postDataJSON())).not.toMatch(
+        /capture|onset_ms|landmarks/,
+      );
+      await route.fulfill({ status: 429, json: { error: "unavailable" } });
+    });
+    await practice(page, move);
+    await page.getByRole("button", { name: "Я готов", exact: true }).click();
+    await state(page, "capturing_attempt");
+    await page.evaluate(() => {
+      (window as any).testMotion = "lower";
+    });
+    await expect(page.getByTestId("capture-hint")).toContainText(
+      /защит|подбородк/,
     );
-    await route.fulfill({ status: 429, json: { error: "unavailable" } });
+    await expect(page.locator(".training-cue strong")).toHaveText("В ЗАЩИТУ");
+    await expect(page.getByTestId("result")).toHaveCount(0);
+    expect(calls).toBe(0);
+    await page.evaluate(() => {
+      (window as any).testMotion = "guard";
+    });
+    await expect(page.locator(".training-cue strong")).toHaveText("БЕЙ!");
+    await page.evaluate(() => {
+      (window as any).testMotion = "punch";
+    });
+    await state(page, "result");
+    await expect(page.getByTestId("capture-summary")).toContainText(
+      "возврат в защиту",
+    );
+    expect(calls).toBe(1);
+    await page.waitForTimeout(400);
+    expect(calls).toBe(1);
+    await page.screenshot({
+      path: `private-data/${key}-capture-desktop.png`,
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Выбрать другой удар" }).click();
+    await stopped(page);
+    expect(errors).toEqual([]);
   });
-  await practice(page);
-  await page.getByRole("button", { name: "Я готов", exact: true }).click();
-  await state(page, "capturing_attempt");
-  await page.evaluate(() => {
-    (window as any).testMotion = "lower";
-  });
-  await expect(page.getByTestId("capture-hint")).toContainText(
-    /защит|подбородк/,
-  );
-  await expect(page.locator(".training-cue strong")).toHaveText("В ЗАЩИТУ");
-  await expect(page.getByTestId("result")).toHaveCount(0);
-  expect(calls).toBe(0);
-  await page.evaluate(() => {
-    (window as any).testMotion = "guard";
-  });
-  await expect(page.locator(".training-cue strong")).toHaveText("БЕЙ!");
-  await page.evaluate(() => {
-    (window as any).testMotion = "punch";
-  });
-  await state(page, "result");
-  await expect(page.getByTestId("capture-summary")).toContainText(
-    "возврат в защиту",
-  );
-  expect(calls).toBe(1);
-  await page.waitForTimeout(400);
-  expect(calls).toBe(1);
-  await page.screenshot({
-    path: "private-data/jab-capture-desktop.png",
-    fullPage: true,
-  });
-  await page.getByRole("button", { name: "Выбрать другой удар" }).click();
-  await stopped(page);
-  expect(errors).toEqual([]);
-});
 
-test("real jab controller on mobile: guard occlusion preserves boundaries but no score or AI request", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await mockCamera(page, true, true);
-  let calls = 0;
-  await page.route("**/api/coach-feedback", async (route) => {
-    calls++;
-    await route.fulfill({ json: feedback });
+for (const [move, key, wrist, elbow] of [
+  ["Джеб", "jab", "правая кисть", "правый локоть"],
+  ["Кросс", "cross", "левая кисть", "левый локоть"],
+  ["Передний боковой", "hook", "правая кисть", "правый локоть"],
+])
+  test(`real ${key} controller on mobile: guard occlusion preserves boundaries but no score or AI request`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await mockCamera(page, true, true);
+    let calls = 0;
+    await page.route("**/api/coach-feedback", async (route) => {
+      calls++;
+      await route.fulfill({ json: feedback });
+    });
+    await practice(page, move);
+    await page.evaluate(() => {
+      (window as any).testOccludeGuard = true;
+    });
+    await page.getByRole("button", { name: "Я готов", exact: true }).click();
+    await state(page, "capturing_attempt");
+    await page.evaluate(() => {
+      (window as any).testMotion = "punch";
+    });
+    await state(page, "result");
+    await expect(page.getByTestId("capture-summary")).toContainText(
+      "возврат в защиту",
+    );
+    await expect(page.getByTestId("result")).toContainText("Без балла");
+    await expect(page.getByTestId("result")).toContainText(wrist);
+    await expect(page.getByTestId("result")).toContainText(elbow);
+    expect(calls).toBe(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `private-data/${key}-capture-mobile.png`,
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Выбрать другой удар" }).click();
+    await stopped(page);
+    expect(errors).toEqual([]);
   });
-  await practice(page);
-  await page.evaluate(() => {
-    (window as any).testOccludeGuard = true;
-  });
-  await page.getByRole("button", { name: "Я готов", exact: true }).click();
-  await state(page, "capturing_attempt");
-  await page.evaluate(() => {
-    (window as any).testMotion = "punch";
-  });
-  await state(page, "result");
-  await expect(page.getByTestId("capture-summary")).toContainText(
-    "возврат в защиту",
-  );
-  await expect(page.getByTestId("result")).toContainText("Без балла");
-  await expect(page.getByTestId("result")).toContainText("правая кисть");
-  await expect(page.getByTestId("result")).toContainText("правый локоть");
-  expect(calls).toBe(0);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({
-    path: "private-data/jab-capture-mobile.png",
-    fullPage: true,
-  });
-  await page.getByRole("button", { name: "Выбрать другой удар" }).click();
-  await stopped(page);
-  expect(errors).toEqual([]);
-});
 
-test("late real jab finishes after the waiting deadline instead of becoming no-attempt", async ({
-  page,
-}) => {
-  await mockCamera(page, true, true);
-  let calls = 0;
-  await page.route("**/api/coach-feedback", async (route) => {
-    calls++;
-    await route.fulfill({ status: 429, json: { error: "unavailable" } });
+for (const move of ["Джеб", "Кросс", "Передний боковой"])
+  test(`late real ${move} finishes after the waiting deadline instead of becoming no-attempt`, async ({
+    page,
+  }) => {
+    await mockCamera(page, true, true);
+    let calls = 0;
+    await page.route("**/api/coach-feedback", async (route) => {
+      calls++;
+      await route.fulfill({ status: 429, json: { error: "unavailable" } });
+    });
+    await practice(page, move);
+    await page.getByRole("button", { name: "Я готов", exact: true }).click();
+    await state(page, "capturing_attempt");
+    const waitingAt = await page.evaluate(() => performance.now());
+    await page.waitForTimeout(7400);
+    await page.evaluate(() => {
+      // Guard was already observed for seven seconds; start the motion part
+      // of the fixture without adding another synthetic guard pre-roll.
+      (window as any).testMotionOffset = 24;
+      (window as any).testMotion = "punch";
+    });
+    await state(page, "result");
+    expect(
+      (await page.evaluate(() => performance.now())) - waitingAt,
+    ).toBeGreaterThan(8000);
+    await expect(page.getByTestId("capture-summary")).toContainText(
+      "возврат в защиту",
+    );
+    await expect(page.getByTestId("result")).not.toContainText(
+      "Удар не обнаружен",
+    );
+    expect(calls).toBe(1);
   });
-  await practice(page);
-  await page.getByRole("button", { name: "Я готов", exact: true }).click();
-  await state(page, "capturing_attempt");
-  const waitingAt = await page.evaluate(() => performance.now());
-  await page.waitForTimeout(7400);
-  await page.evaluate(() => {
-    // Guard was already observed for seven seconds; start the motion part
-    // of the fixture without adding another synthetic guard pre-roll.
-    (window as any).testMotionOffset = 24;
-    (window as any).testMotion = "punch";
-  });
-  await state(page, "result");
-  expect(
-    (await page.evaluate(() => performance.now())) - waitingAt,
-  ).toBeGreaterThan(8000);
-  await expect(page.getByTestId("capture-summary")).toContainText(
-    "возврат в защиту",
-  );
-  await expect(page.getByTestId("result")).not.toContainText(
-    "Удар не обнаружен",
-  );
-  expect(calls).toBe(1);
-});
 
 test("a candidate turning into two raised arms is not graded or sent to AI", async ({
   page,
@@ -408,7 +427,7 @@ test("a candidate turning into two raised arms is not graded or sent to AI", asy
   });
   await state(page, "result");
   await expect(page.getByTestId("result")).toContainText(
-    "Отдельный джеб не выделен",
+    "Отдельный удар не выделен",
   );
   await expect(page.getByTestId("result")).toContainText("Без балла");
   await expect(page.getByTestId("capture-summary")).toHaveCount(0);
@@ -634,9 +653,7 @@ test("calibration timeout and missing movement permit retry without score or AI 
   });
   await page.getByRole("button", { name: "Я готов" }).click();
   await state(page, "result");
-  await expect(page.getByTestId("result")).toContainText(
-    "Удар не выделен",
-  );
+  await expect(page.getByTestId("result")).toContainText("Удар не выделен");
   await expect(page.getByTestId("result")).toContainText("Без балла");
   expect(requests).toBe(0);
 });

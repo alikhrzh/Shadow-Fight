@@ -200,6 +200,7 @@ const output = {
       ["observations", path.join(directory, "jeb10times.frames.json")],
       ["annotations", path.join(directory, "annotations.json")],
       ["capture", "apps/web/src/training/jabCapture.ts"],
+      ["punchCapture", "apps/web/src/training/punchCapture.ts"],
       ["controller", "apps/web/src/training/attemptController.ts"],
       ["normalization", "packages/coach-core/src/normalize.ts"],
       ["analysis", "packages/coach-core/src/analyze.ts"],
