@@ -33,7 +33,15 @@ import {
   addProgress,
   saveProgress,
   clearProgress,
+  type Progress,
 } from "../progress/progressStore";
+import { useAccount } from "../account/AccountContext";
+import {
+  AccountControls,
+  AccountOverview,
+  AuthDialog,
+  type AuthMode,
+} from "../account/AccountUI";
 
 const emptyGestureView = () => ({
   up: 0,
@@ -44,6 +52,7 @@ const emptyGestureView = () => ({
 });
 
 export function TrainingFlow() {
+  const account = useAccount();
   const [t, dispatch] = useReducer(trainingReducer, initialTraining),
     current = useRef(t);
   const [facing, setFacing] = useState<"user" | "environment">("user");
@@ -52,6 +61,8 @@ export function TrainingFlow() {
   const progressRef = useRef(progress),
     savedId = useRef<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [hint, setHint] = useState(
     "Встаньте в боксерскую стойку. Покажите голову, плечи, локти и обе кисти.",
   );
@@ -66,6 +77,7 @@ export function TrainingFlow() {
     goodSince = useRef<number | null>(null);
   const audio = useRef<AudioContext | null>(null),
     abortAI = useRef<AbortController | null>(null);
+  const uploadedId = useRef<string | null>(null);
   const send = useCallback((event: Event) => {
     const next = trainingReducer(current.current, event);
     if (next === current.current) return;
@@ -205,6 +217,18 @@ export function TrainingFlow() {
     };
   }, [t.state, t.report, t.attemptId, send]);
 
+  useEffect(() => {
+    if (
+      !account.user ||
+      !t.report ||
+      !t.attemptId ||
+      uploadedId.current === t.attemptId
+    )
+      return;
+    uploadedId.current = t.attemptId;
+    void account.recordAttempt(t.attemptId, t.report);
+  }, [account.recordAttempt, account.user, t.attemptId, t.report]);
+
   const onFrame = useCallback(
     (data: CameraFrame) => {
       const s = current.current;
@@ -305,6 +329,25 @@ export function TrainingFlow() {
   const repeatable = startAllowed(t.state);
   const showExitGesture = exitGestureAllowed(t.state);
   const showGestures = showExitGesture || repeatable;
+  const serverProgress: Progress = {};
+  if (account.user && account.summary)
+    for (const item of account.summary.moves)
+      if (
+        item.count > 0 &&
+        item.last_score !== null &&
+        item.best_score !== null &&
+        item.average_score !== null &&
+        item.last_practiced_at
+      )
+        serverProgress[item.move] = {
+          count: item.count,
+          last: item.last_score,
+          best: item.best_score,
+          average: item.average_score,
+          date: item.last_practiced_at,
+          errors: item.common_violations.slice(0, 3),
+        };
+  const visibleProgress = account.user ? serverProgress : progress;
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -323,10 +366,16 @@ export function TrainingFlow() {
           SHADOW<span>COACH</span>
           <small>BETA</small>
         </a>
-        <div className="header-note">
-          <ShieldCheck size={16} /> Видео остаётся на устройстве
+        <div className="header-actions">
+          <div className="header-note">
+            <ShieldCheck size={16} /> Видео остаётся на устройстве
+          </div>
+          <AccountControls onOpenAuth={setAuthMode} />
         </div>
       </header>
+      {authMode && (
+        <AuthDialog initialMode={authMode} onClose={() => setAuthMode(null)} />
+      )}
       <main data-training-state={t.state}>
         <section className="intro">
           <div>
@@ -378,9 +427,10 @@ export function TrainingFlow() {
                 </select>
               </div>
             </section>
+            <AccountOverview onOpenAuth={setAuthMode} />
             <div className="lesson-grid">
               {lessons.map((l, i) => {
-                const p = progress[l.move];
+                const p = visibleProgress[l.move];
                 return (
                   <article
                     className="lesson-card panel"
@@ -445,15 +495,29 @@ export function TrainingFlow() {
                   role="group"
                   aria-label="Подтверждение очистки"
                 >
-                  <p>Удалить весь локальный прогресс трёх уроков?</p>
+                  <p>
+                    {account.user
+                      ? "Удалить всю историю попыток из аккаунта и этого браузера?"
+                      : "Удалить весь локальный прогресс трёх уроков?"}
+                  </p>
                   <button
                     className="secondary-button"
                     onClick={() => {
-                      const ok = clearProgress();
-                      progressRef.current = {};
-                      setProgress({});
-                      setStorageWarning(!ok);
-                      setConfirmClear(false);
+                      setClearError(null);
+                      void (async () => {
+                        try {
+                          if (account.user) await account.clearHistory();
+                          const ok = clearProgress();
+                          progressRef.current = {};
+                          setProgress({});
+                          setStorageWarning(!ok);
+                          setConfirmClear(false);
+                        } catch {
+                          setClearError(
+                            "Не удалось очистить историю в backend. Ничего не удалено из браузера.",
+                          );
+                        }
+                      })();
                     }}
                   >
                     Да, очистить
@@ -479,6 +543,7 @@ export function TrainingFlow() {
                   закрытия страницы.
                 </p>
               )}
+              {clearError && <p role="alert">{clearError}</p>}
             </div>
           </>
         )}
@@ -684,6 +749,12 @@ export function TrainingFlow() {
               Для AI-подсказки в NVIDIA отправляются только обезличенные
               числовые метрики и найденные технические ошибки.
             </p>
+            {account.user && (
+              <p>
+                В вашем аккаунте backend хранит только агрегированный отчёт о
+                попытке. Кадры, видео и координаты суставов не загружаются.
+              </p>
+            )}
           </div>
         </section>
         <footer className="site-footer">

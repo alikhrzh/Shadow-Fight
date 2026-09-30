@@ -3,7 +3,13 @@ from fastapi import APIRouter, Request, Response, status
 from shadowcoach_api.application.dto import LoginCommand, RegisterCommand
 
 from ..dependencies import Auth, CurrentUser
-from ..schemas import AuthResponse, LoginRequest, RegisterRequest, UserResponse
+from ..schemas import (
+    AuthResponse,
+    LoginRequest,
+    RegisterRequest,
+    SessionStatusResponse,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -29,6 +35,14 @@ def _clear_refresh_cookie(request: Request, response: Response) -> None:
         secure=settings.cookie_secure,
         samesite="lax",
         path="/api/v1/auth",
+    )
+
+
+@router.get("/session", response_model=SessionStatusResponse)
+async def session_status(request: Request) -> SessionStatusResponse:
+    settings = request.app.state.settings
+    return SessionStatusResponse(
+        refresh_cookie_present=bool(request.cookies.get(settings.refresh_cookie_name))
     )
 
 

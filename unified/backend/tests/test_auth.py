@@ -4,10 +4,17 @@ from .conftest import register
 
 
 async def test_register_login_refresh_and_logout(client: AsyncClient) -> None:
+    anonymous = await client.get("/api/v1/auth/session")
+    assert anonymous.status_code == 200
+    assert anonymous.json() == {"refresh_cookie_present": False}
+
     registered = await register(client)
     assert registered["user"]["email"] == "boxer@example.com"
     assert registered["token_type"] == "bearer"
     assert "shadowcoach_refresh" in client.cookies
+    assert (await client.get("/api/v1/auth/session")).json() == {
+        "refresh_cookie_present": True
+    }
 
     me = await client.get(
         "/api/v1/users/me",
@@ -39,6 +46,9 @@ async def test_register_login_refresh_and_logout(client: AsyncClient) -> None:
     logout = await client.post("/api/v1/auth/logout")
     assert logout.status_code == 204
     assert "shadowcoach_refresh" not in client.cookies
+    assert (await client.get("/api/v1/auth/session")).json() == {
+        "refresh_cookie_present": False
+    }
     assert (await client.post("/api/v1/auth/refresh")).status_code == 401
 
 

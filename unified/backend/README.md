@@ -74,13 +74,17 @@ ruff check src tests alembic
 
 ## Browser contract
 
-The browser should keep the access token in memory, call `POST /api/v1/auth/refresh`
-with `credentials: "include"` after a reload or 401, and never put the refresh token in
-JavaScript storage. All cross-origin calls must use an explicitly configured origin.
+The web app implements this contract. It keeps the access token in memory, checks
+`GET /api/v1/auth/session` on startup, calls `POST /api/v1/auth/refresh` with
+`credentials: "include"` when a refresh cookie exists or after a 401, and never puts
+the refresh token in JavaScript storage. Vite proxies `/api/v1` during development so
+the refresh cookie remains same-origin. Cross-origin deployments must use an explicitly
+configured origin and compatible cookie policy.
 
-After a local report is produced, map it to `POST /api/v1/attempts`. The existing
-`crypto.randomUUID()` attempt ID becomes `client_attempt_id`; retrying the same upload
-is safe. Keep failed uploads in a small local outbox and retry when connectivity returns.
+After a local report is produced, the web app maps it to `POST /api/v1/attempts`. The
+existing `crypto.randomUUID()` attempt ID becomes `client_attempt_id`; retrying the same
+upload is safe. Failed privacy-safe uploads are kept in a small per-user local outbox and
+retried when connectivity returns.
 
 Important: scores originate on the client and are suitable for personal progress, not
 competitive leaderboards or rewards. Any competitive feature would require trusted
@@ -97,16 +101,14 @@ server-side verification of the movement data.
 
 ## Recommended product roadmap
 
-1. Connect the web app with an offline outbox so a completed local report is uploaded
-   when connectivity returns, without making camera analysis depend on the backend.
-2. Add weekly goals, consistency streaks, personal-best events, and per-error trends.
+1. Add weekly goals, consistency streaks, personal-best events, and per-error trends.
    Reward practice quality and consistency rather than turning an unverified client score
    into a global leaderboard.
-3. Add account verification, password reset, session/device management, and optional
+2. Add account verification, password reset, session/device management, and optional
    Google/Apple OpenID Connect login.
-4. Add an explicit coach-sharing workflow: users select individual attempts or a date
+3. Add an explicit coach-sharing workflow: users select individual attempts or a date
    range, grant time-limited access, and can revoke it. Never share video implicitly.
-5. Version analyzer configurations with every report and show progress discontinuities
+4. Version analyzer configurations with every report and show progress discontinuities
    when scoring thresholds materially change.
-6. At higher volume, maintain progress rollups transactionally instead of scanning a
+5. At higher volume, maintain progress rollups transactionally instead of scanning a
    user's completed score records for every summary request.

@@ -1,1 +1,10 @@
-export { TrainingFlow as App } from "./training/TrainingFlow";
+import { AccountProvider } from "./account/AccountContext";
+import { TrainingFlow } from "./training/TrainingFlow";
+
+export function App() {
+  return (
+    <AccountProvider>
+      <TrainingFlow />
+    </AccountProvider>
+  );
+}

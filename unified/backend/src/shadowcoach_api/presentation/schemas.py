@@ -138,6 +138,10 @@ class AuthResponse(ApiModel):
     user: UserResponse
 
 
+class SessionStatusResponse(ApiModel):
+    refresh_cookie_present: bool
+
+
 class ViolationInput(ApiModel):
     code: str
     severity: float = Field(ge=0, le=1)
