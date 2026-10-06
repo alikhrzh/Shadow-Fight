@@ -206,9 +206,11 @@ Compose содержит **только development-настройки**. Для
 
 При необходимости создайте `.env.local` по [`.env.example`](.env.example), не перезаписывая существующий файл с настройками. Задайте ключ локально и перезапустите Vite. `npm run dev` обслуживает `/api/coach-feedback` серверным middleware; FastAPI не нужен для NVIDIA-пояснений.
 
-Для Vercel оставьте **Root Directory** пустым: конфигурация находится в корне репозитория. [vercel.json](vercel.json) задаёт загрузку модели, сборку и каталог `apps/web/dist`; NVIDIA-переменные задаются на сервере. FastAPI размещается отдельно. [Инструкция публикации](docs/DEPLOYMENT.md).
+Production-стенд доступен на **[shadow-fight-unified.vercel.app](https://shadow-fight-unified.vercel.app/)**. Vercel обслуживает frontend и `/api/coach-feedback`, а `/api/v1/*` проксирует на FastAPI в Render; серверная история хранится в PostgreSQL. Благодаря same-origin proxy `VITE_API_BASE_URL` в Vercel остаётся пустым, а refresh token хранится в Secure HttpOnly-cookie. Readiness backend можно проверить по адресу [`/health/ready`](https://shadow-fight-nc8t.onrender.com/health/ready).
 
-`npm run preview` показывает собранный интерфейс, но не запускает NVIDIA endpoint и не наследует dev-proxy FastAPI. Для полного production-сценария настройте серверные маршруты или `VITE_API_BASE_URL` и подходящую политику CORS/cookie. Статический интерфейс может работать с локальным анализом и fallback.
+После перехода на корневую структуру оставьте **Root Directory** в Vercel пустым. [vercel.json](vercel.json) задаёт загрузку модели, сборку, каталог `apps/web/dist` и адрес Render API; при создании другого backend обновите destination rewrite. NVIDIA-переменные задаются только на сервере. [Инструкция публикации](docs/DEPLOYMENT.md).
+
+`npm run preview` показывает собранный интерфейс, но не запускает NVIDIA endpoint и не наследует dev-proxy FastAPI. Локальная тренировка при этом остаётся доступной. Free Render Web Service засыпает после периода без входящих запросов, поэтому первый вход или запрос истории после простоя может занять около минуты; перед демонстрацией откройте readiness endpoint. Free PostgreSQL рассчитан на временный стенд, истекает через 30 дней и не имеет backups.
 
 ## Переменные окружения
 
