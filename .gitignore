@@ -1,4 +1,42 @@
+# Operating systems and editors
+.DS_Store
+.idea/
+.vscode/
+
+# JavaScript
+node_modules/
+dist/
+coverage/
+.cache/
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+build/
+*.egg-info/
+
+# Local configuration
 .env
 .env.*
 !.env.example
 .vercel/
+
+# Generated browser and test output
+playwright-report/
+test-results/
+publication/
+apps/web/public/models/*.task
+apps/web/public/wasm/
+apps/web/public/worker/
+
+# Private recordings and evaluation data
+private-data/*
+!private-data/README.md
+testingdataset/
+datasets/
+
+# Local backend databases
+backend/*.db
+backend/*.db-*
