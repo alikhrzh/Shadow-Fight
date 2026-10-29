@@ -114,6 +114,23 @@ tools/python-reference/   Python reference implementation
 docs/                     Architecture, testing, and deployment notes
 ```
 
+The live training path is deliberately split into layers:
+
+- `apps/web/` owns the React interface, camera lifecycle, MediaPipe worker,
+  gestures, attempt state machine, local progress, and feedback presentation.
+- `packages/coach-core/` contains framework-independent feature extraction,
+  quality gates, technique rules, and scoring.
+- `shared/` stores configuration and contracts used by the browser, tests, and
+  reference implementation so thresholds do not drift between components.
+- `api/coach-feedback.ts` is the optional server-side NVIDIA explanation
+  endpoint; it receives allowlisted aggregates rather than video or landmarks.
+- `backend/` provides the optional account, history, and progress API with
+  FastAPI, PostgreSQL, and Alembic migrations.
+- `tests/` exercises deterministic TypeScript logic, `browser-tests/` covers
+  user flows, and `tools/python-reference/` checks numerical parity.
+- `scripts/` contains model download, build audit, replay, and parity utilities;
+  `docs/` explains architecture, testing boundaries, and deployment.
+
 ## Privacy and model disclosure
 
 - Camera frames and landmarks are processed in the browser and are not uploaded.
