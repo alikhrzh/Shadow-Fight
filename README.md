@@ -1,75 +1,72 @@
 # ShadowCoach
 
-Browser-based boxing practice with on-device pose estimation, deterministic
-technique checks, and optional AI explanations.
+**Камера — контроллер. Один удар — конкретная обратная связь.**
 
-**[Open the verified web demo](https://shadow-fight-unified.vercel.app/)**
+ShadowCoach — браузерный учебный тренажёр по боксу. Пользователь выбирает стойку и удар, смотрит урок, запускает попытку жестом и получает локальный разбор движения. [Открыть приложение](https://shadow-fight-unified.vercel.app/).
 
-![ShadowCoach lessons for jab, cross, and lead hook](docs/readme/lessons-desktop.png)
+![Уроки джеба, кросса и переднего бокового](docs/readme/lessons-desktop.png)
 
-Admit Hackathon 2026 · Motion · B / FITNESS · team NAN. The project received
-**87/100** from the hackathon jury and did not enter the final top 15.
+Admit Hackathon 2026 · Motion · B / FITNESS · команда NAN. Оценка жюри — **87/100**; проект не вошёл в финальный топ-15. Базовая тренировка работает без аккаунта, FastAPI и ключа NVIDIA.
 
-## Problem
+## Что делает приложение
 
-A recorded lesson explains a movement but cannot react to one learner's punch.
-ShadowCoach combines a short lesson, a camera-based practice flow, and feedback
-on one selected punch. The user chooses jab, cross, or lead hook; the system
-does not claim to classify arbitrary boxing movements.
+1. Выберите стойку и один из трёх ударов: джеб передней рукой, кросс задней или передний боковой (хук).
+2. Посмотрите урок и перейдите к практике. Браузер запросит камеру, но не микрофон.
+3. Поднимите обе руки примерно на секунду для запуска. После отсчёта встаньте в защиту и ненадолго замрите для калибровки.
+4. Выполните один удар и верните руку в защиту. Система пытается отделить эту попытку от подготовки и остальных движений.
+5. Если данных достаточно, увидите балл, измеренные компоненты и замечания. Если данных не хватает, увидите причину отказа без выдуманного балла. Повтор доступен жестом или кнопкой.
 
-## Approach
+Выбранный тип упражнения известен заранее: приложение **не распознаёт произвольные виды ударов**. Показ скелета сам по себе также не означает, что техника удара измерена достаточно надёжно.
 
-1. MediaPipe Pose Landmarker runs in a Web Worker and produces body landmarks.
-2. A state machine confirms guard calibration and isolates one punch attempt.
-3. `coach-core` normalizes coordinates and calculates motion, elbow, guard,
-   trajectory, and return features.
-4. Explicit TypeScript rules determine data quality, violations, and the local
-   score. MediaPipe does not provide the boxing score.
-5. An optional NVIDIA NIM request explains the already selected feedback. It
-   does not replace the local evaluator and receives no video or raw landmarks.
+## Как получается результат
 
-The core practice flow works without an account, FastAPI, or an NVIDIA key.
+```mermaid
+flowchart TD
+    CAMERA["Камера браузера"] --> WORKER["Web Worker: MediaPipe Pose Landmarker"]
+    WORKER --> GESTURES["Жесты управления"]
+    GESTURES --> UI["Состояние тренировки"]
+    WORKER --> CAPTURE["Калибровка и выделение одной попытки"]
+    CAPTURE --> CORE["coach-core: качество, признаки, правила"]
+    CORE --> RESULT["Локальный балл или отказ от оценки"]
+    RESULT --> UI
+    RESULT -. "агрегаты надёжной попытки" .-> API["Серверный endpoint NVIDIA"]
+    API -. "необязательное объяснение" .-> UI
+```
 
-## Results
+**Готовая модель MediaPipe** выдаёт координаты ключевых точек тела. Команда не обучала эту модель. [Камера](apps/web/src/components/LiveCamera.tsx) отправляет кадры в [worker](apps/web/src/pose/pose.worker.ts): пока предыдущий кадр обрабатывается, очередь новых кадров не накапливается. Worker вызывает модель и передаёт точки в контроллер попытки.
 
-### Labelled video evaluation
+**Логика приложения** проверяет жесты, ведёт состояния тренировки, калибрует защиту и выделяет один удар. [Анализатор](packages/coach-core/src/analyze.ts) проверяет пригодность данных; [вычисление признаков](packages/coach-core/src/features.ts) измеряет движение кисти, угол локтя, траекторию, положение свободной руки и возврат; [правила](packages/coach-core/src/evaluate.ts) сопоставляют признаки с [порогами и весами](shared/config/defaults.json). Это правила в TypeScript, а не нейросеть, обученная определять ошибки техники.
 
-The fixed evaluation contains **100 clips** from 20 source videos of one
-participant: 35 jabs, 30 crosses, and 35 lead hooks. The exercise type and
-stance were provided to the system. Expert labels cover 12 technique checks;
-undefined and non-applicable labels were excluded from the metric.
+**NVIDIA** при доступности получает ограниченные агрегаты и может текстом объяснить уже выбранное локальное замечание. Она не устанавливает числовой балл. При отсутствии ключа или ошибке запроса локальный результат остаётся доступен. Состав отправляемых данных ограничен [safePayload](apps/web/src/feedback/safePayload.ts).
 
-The full path—pose landmarks, guard calibration, attempt capture, and
-rule-based evaluation—reached **51.9% micro-F1** for error detection when missed
-attempts were included. A completed score was produced for **55/100 clips**;
-this is score coverage, not accuracy.
+### Жест управления ≠ измеримая техника
 
-| Exercise | Completed scores | Precision | Recall | F1 |
-| --- | ---: | ---: | ---: | ---: |
-| Jab | 23/35 | 46.9% | 57.7% | 51.7% |
-| Cross | 21/30 | 73.7% | 70.0% | 71.8% |
-| Lead hook | 11/35 | 33.3% | 26.3% | 29.4% |
-| **All clips** | **55/100** | **51.5%** | **52.3%** | **51.9%** |
+Поднятые руки могут быть достаточно различимы для команды «начать», даже если человек слишком далеко для оценки удара. Поэтому [условия для жеста и для оценки](apps/web/src/training/cameraQuality.ts) разделены. [Тест этого случая](tests/gesture-camera.test.ts) проверяет оба условия на искусственном кадре и удержание жеста; он не проверяет физическую камеру и точность оценки бокса.
 
-A diagnostic shortcut that analysed each whole clip completed 92 scores but
-reached only **26.6% micro-F1**. Higher coverage alone did not improve quality.
-The dataset is small, comes from one participant, and was used during
-development, so these results are not an independent generalization claim.
-They also do not validate the meaning of the 0–100 technique score.
+### Ошибка движения ≠ плохие данные
 
-### Reproducibility checks
+`guard_dropped`, `low_amplitude` и `insufficient_extension` — примеры замечаний о технике после завершённой оценки. `wrist_not_visible`, `multiple_people` и `low_pose_quality` означают, что исходным точкам нельзя доверять достаточно для балла. Ненадёжная попытка не должна попадать в среднюю оценку или запрос на AI-объяснение.
 
-The current local verification completed **241/241 runnable Node tests** with
-20 private-data tests explicitly skipped. TypeScript passed, and **108/108**
-synthetic cases matched the Python reference within `1e-7`. The production
-build additionally needs the git-ignored MediaPipe model file; see the setup
-commands below.
+## Результаты на размеченных видео
 
-No physical-camera FPS or end-to-end latency benchmark is claimed.
+Для анализа использовались **100 клипов из 20 исходных видео одного участника**: 35 джебов, 30 кроссов и 35 передних боковых. Тип удара и стойка задавались системе. Экспертная разметка охватывала 12 проверок ошибок; неопределённые и неприменимые метки исключались из расчёта.
 
-## How to run
+| Удар | Клипов | С завершённой оценкой | Precision | Recall с учётом пропусков | Micro-F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Джеб | 35 | 23/35 | 46,9% | 57,7% | 51,7% |
+| Кросс | 30 | 21/30 | 73,7% | 70,0% | 71,8% |
+| Передний боковой | 35 | 11/35 | 33,3% | 26,3% | 29,4% |
+| **Всего** | **100** | **55/100** | **51,5%** | **52,3%** | **51,9%** |
 
-Requirements: Node.js 22.12 or newer and npm.
+**55/100 — покрытие оценкой**, то есть доля клипов, для которых получилось выдать завершённый отчёт. Это не «точность 55%». **51,9% micro-F1** — качество обнаружения размеченных ошибок с учётом пропущенных попыток. По данным зафиксированного прогона: 34 верных замечания, 32 ложных и 31 пропущенная ошибка. Поэтому precision = 34/66, recall = 34/65, F1 = 68/131 ≈ 51,9%.
+
+Для диагностики весь клип также анализировали напрямую, минуя контроллер одной попытки. Такой путь выдал 92 оценки, но получил лишь **26,6% micro-F1**. Дополнительные отчёты не сделали замечания точнее: при анализе всего клипа подготовка и другие движения могут смешиваться с оцениваемым ударом. Это объяснение возможного механизма, а не отдельно доказанная причина каждого промаха.
+
+Данные одного человека использовались при разработке. Они не подтверждают качество на новых людях, камерах и ракурсах, а также не подтверждают, что балл 0–100 соответствует экспертной оценке техники. Особенно слабым остаётся передний боковой. Следующая проверка — записать новых участников и ракурсы, не менять пороги на этих записях, разметить ошибки независимо и отдельно посчитать покрытие, precision, recall и F1 по каждому удару.
+
+## Быстрый запуск
+
+Нужны Git, npm и Node.js **22.12 или новее**. Из корня проекта:
 
 ```bash
 git clone https://github.com/alikhrzh/Shadow-Fight.git
@@ -79,16 +76,20 @@ npm run model:download
 npm run dev
 ```
 
-Open the local URL printed by Vite. Camera access requires `localhost` or HTTPS.
-For the optional FastAPI/PostgreSQL account and history service:
+Откройте адрес, напечатанный Vite. Камера работает через `localhost` или HTTPS. `model:download` загружает файл MediaPipe, которого нет в Git; `dev` подготавливает worker и WASM. Для базовой тренировки Python, Docker, аккаунт и NVIDIA API key не нужны.
+
+Для дополнительного сервиса аккаунта и истории нужен Docker. Из каталога `backend`:
 
 ```bash
-cd backend
 docker compose up --build -d
 curl --fail http://127.0.0.1:8000/health/ready
 ```
 
-Run the main checks from the repository root:
+Инструкции по [backend](backend/README.md), [публикации](docs/DEPLOYMENT.md) и [ограничениям проверок](docs/TESTING.md) вынесены отдельно. Для AI-объяснений серверный `NVIDIA_API_KEY` задаётся по [.env.example](.env.example); переменная с префиксом `VITE_` для секретного ключа не подходит.
+
+## Проверки
+
+Команды из корня репозитория после установки зависимостей и загрузки модели:
 
 ```bash
 npm test
@@ -97,70 +98,34 @@ npm run typecheck
 npm run build
 ```
 
-Browser tests and backend tests are documented in
-[`docs/TESTING.md`](docs/TESTING.md) and [`backend/README.md`](backend/README.md).
-Deployment details are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Для браузерных сценариев дополнительно нужны `npx playwright install chromium` и `npm run test:browser`. Проверки backend описаны в [backend/README.md](backend/README.md).
 
-## Project structure
+В опубликованном ранее прогоне указаны **241/241 запускаемых Node-тестов**, 20 пропущенных проверок приватных данных, успешная проверка типов и **108/108** совпадений синтетических примеров с Python-эталоном (`1e-7`). Эти числа относятся к тому прогону: подготовка этого README **не запускает тесты заново**. Браузерные сценарии используют искусственную камеру и тестовые ответы AI; успешные тесты не доказывают точность на живой камере.
 
-```text
-apps/web/                 React/Vite interface and camera flow
-packages/coach-core/      Features, quality gates, and scoring rules
-shared/                   Shared configuration and contracts
-api/coach-feedback.ts     Optional NVIDIA explanation endpoint
-backend/                  FastAPI, PostgreSQL, and migrations
-tests/, browser-tests/    Unit, parity, and browser checks
-tools/python-reference/   Python reference implementation
-docs/                     Architecture, testing, and deployment notes
-```
+## Где искать код
 
-The live training path is deliberately split into layers:
+| Папка | Ответственность |
+| --- | --- |
+| `apps/web/src/pose/` | MediaPipe worker, обмен сообщениями, отображение точек |
+| `apps/web/src/gestures/` | Командные жесты и их удержание |
+| `apps/web/src/training/` | Состояния, калибровка и захват попытки |
+| `packages/coach-core/src/` | Качество данных, признаки, правила ошибок и балл |
+| `shared/` | Общие пороги, типы обратной связи и фикстуры |
+| `api/coach-feedback.ts` | Необязательное текстовое объяснение NVIDIA |
+| `backend/` | Необязательные аккаунт, история и прогресс |
+| `tests/`, `browser-tests/` | Проверки логики и браузерных сценариев |
+| `tools/python-reference/` | Python-эталон для сравнения вычислений |
 
-- `apps/web/` owns the React interface, camera lifecycle, MediaPipe worker,
-  gestures, attempt state machine, local progress, and feedback presentation.
-- `packages/coach-core/` contains framework-independent feature extraction,
-  quality gates, technique rules, and scoring.
-- `shared/` stores configuration and contracts used by the browser, tests, and
-  reference implementation so thresholds do not drift between components.
-- `api/coach-feedback.ts` is the optional server-side NVIDIA explanation
-  endpoint; it receives allowlisted aggregates rather than video or landmarks.
-- `backend/` provides the optional account, history, and progress API with
-  FastAPI, PostgreSQL, and Alembic migrations.
-- `tests/` exercises deterministic TypeScript logic, `browser-tests/` covers
-  user flows, and `tools/python-reference/` checks numerical parity.
-- `scripts/` contains model download, build audit, replay, and parity utilities;
-  `docs/` explains architecture, testing boundaries, and deployment.
+## Приватность и ограничения
 
-## Privacy and model disclosure
+- Кадры и точки тела обрабатываются в браузере; приложение не записывает видео и не запрашивает микрофон. Гостевой прогресс хранит агрегаты локально.
+- При включении объяснения NVIDIA передаются разрешённые агрегаты завершённой попытки, а не видеокадры или координаты суставов. После входа безопасный отчёт может быть сохранён в backend.
+- Одна RGB-камера не измеряет силу удара и не даёт точной 3D-биомеханики. Ракурс, перекрытия, слабый свет и низкая частота обработки влияют на измеримость.
+- Поддерживаются выбранные одиночные удары, а не комбинации и произвольное распознавание действий. Нет опубликованного замера FPS, задержки, нагрева и расхода батареи на физических телефонах.
+- MediaPipe и модель NVIDIA — готовые сторонние модели. Помощники с ИИ использовались при реализации и работе с документацией; этот README не приписывает конкретному участнику ручное написание всех файлов или личный запуск каждого теста.
 
-- Camera frames and landmarks are processed in the browser and are not uploaded.
-- The application does not request the microphone or record video.
-- Guest progress stores aggregate results in local storage.
-- The optional AI payload is allowlisted and contains aggregate features, not
-  frames, joint coordinates, or account data.
-- MediaPipe Pose Landmarker and the optional NVIDIA language model are
-  pretrained models; the team did not train them.
-- AI assistants supported parts of implementation and documentation review.
-  The repository authors remain responsible for the rules, tests, claims, and
-  final product decisions.
+## Что улучшать дальше
 
-## Limitations
-
-- The labelled set contains one participant and is not an independent benchmark.
-- Lead-hook capture and feedback are substantially weaker than cross results.
-- The project has not published measurements from physical Android/iPhone
-  cameras or Safari, including FPS, latency, heat, and battery use.
-- A 2D camera angle can distort elbow and shoulder measurements.
-- Rules cover three selected exercises, not combinations or open-ended action
-  recognition.
-- AI explanations may be unavailable or wrong; local feedback remains visible.
-
-## Roadmap
-
-- Evaluate on new participants and camera positions held out from development.
-- Improve lead-hook attempt capture before tuning technique thresholds.
-- Add a physical-device matrix with FPS, latency, heat, and failure-rate results.
-- Review technique labels and feedback with a qualified boxing coach.
-- Calibrate the 0–100 score against labelled outcomes before presenting it as a
-  meaningful quality measure.
-- Expand exercises only after the current three meet an explicit quality bar.
+1. Проверить захват и замечания на новых людях и ракурсах; отдельно разобрать слабые результаты хука.
+2. Проверить работу на физических устройствах, включая пропуски кадров и задержку.
+3. Сверить разметку ошибок и рекомендации с тренером, затем независимо проверить пороги и смысл шкалы 0–100.
